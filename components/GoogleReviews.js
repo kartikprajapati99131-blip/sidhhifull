@@ -1,29 +1,34 @@
 "use client";
+
 import { useEffect } from "react";
 
 export default function GoogleReviews() {
   useEffect(() => {
-    const existing = document.querySelector('script[src*="trustindex"]');
-    if (existing) existing.remove();
+    // Prevent duplicate script loading
+    if (document.querySelector('script[src*="featurable.com"]')) return;
 
     const script = document.createElement("script");
-    script.src = "https://cdn.trustindex.io/loader.js?661bf6c7167c268f2b468492875";
-    script.defer = true;
+    script.src = "https://featurable.com/assets/bundle.js";
     script.async = true;
+    script.defer = true;
+    script.charset = "UTF-8";
 
-    // Inject script INSIDE our container, not in <head>
-    // This tells Trustindex to render near this element
-    document.getElementById("trustindex-container")?.appendChild(script);
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
   }, []);
 
   return (
-    <div
-      id="trustindex-container"
-      className="w-full px-4 py-10 "
-    >
-      <div data-widget-id="661bf6c7167c268f2b468492875" />
-    </div>
+    <section className="w-full bg-[#F5EDDA] py-12 px-4">
+      <div className="max-w-7xl mx-auto">
+        <div
+          id="featurable-82e974cb-c833-4324-8cbe-812866404f45"
+          data-featurable-async
+          className="rounded-3xl overflow-hidden"
+        ></div>
+      </div>
+    </section>
   );
 }
-
-
