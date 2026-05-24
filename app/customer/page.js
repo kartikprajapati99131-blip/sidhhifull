@@ -63,11 +63,6 @@ function buildRows(customers) {
     return customers.map((c) => ({
         "Name":       c.name || "",
         "Phone":      c.phone || "",
-        "Address":    c.address || "",
-        "Notes":      c.notes || "",
-        "Added By":   c.addedByName || "",
-        "Role":       c.addedByRole || "",
-        "Added On":   formatDate(c.createdAt),
     }));
 }
 
