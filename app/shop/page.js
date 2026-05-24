@@ -47,8 +47,9 @@ export async function generateMetadata({ searchParams }) {
 // ✅ SEO FIX: Fetch products on the server so HTML contains real product data
 async function getProducts(type) {
   try {
-    const url = `${process.env.NEXTAUTH_URL || "https://sidhhifull-l1oi.vercel.app/"}/api/type${type ? `?type=${type}` : ""}`;
-    const res = await fetch(url, { next: { revalidate: 60 } }); // revalidate every 60s
+    const base = (process.env.NEXTAUTH_URL || "https://sidhhifull-l1oi.vercel.app").replace(/\/$/, "");
+    const url = `${base}/api/type${type ? `?type=${type}` : ""}`;
+    const res = await fetch(url, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
