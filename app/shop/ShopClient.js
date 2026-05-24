@@ -62,10 +62,7 @@ export default function ShopClient({ initialProducts, selectedType }) {
                     )}
                     <p className="text-gray-400 text-xs mt-1 line-clamp-2">{p.description}</p>
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleAddToCart(p);
-                      }}
+                     
                       className="mt-2 border border-gray-50 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
                     >
                       Add to Cart
