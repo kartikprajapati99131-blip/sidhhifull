@@ -2,7 +2,7 @@
 // Interactive parts (image load state) moved to a client child if needed.
 import Image from "next/image";
 import Main from "@/components/Main";
-import { ToastContainer } from "react-toastify";
+import AboutUs from "@/components/aboutus";
 
 // ✅ SEO FIX: Page-specific metadata (overrides layout default via template)
 export const metadata = {
@@ -47,6 +47,7 @@ export default function Home() {
           </h1>
         </div>
         <Main />
+        <AboutUs />
       </div>
     </>
   );
