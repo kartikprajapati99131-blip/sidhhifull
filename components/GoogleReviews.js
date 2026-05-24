@@ -21,7 +21,7 @@ export default function GoogleReviews() {
   }, []);
 
   return (
-    <section className="w-full bg-[#F5EDDA] py-12 px-4">
+    <section className="w-full  py-12 px-4">
       <div className="max-w-7xl mx-auto">
         <div
           id="featurable-82e974cb-c833-4324-8cbe-812866404f45"

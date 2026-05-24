@@ -8,11 +8,11 @@ import { ToastContainer } from "react-toastify";
 export const metadata = {
   title: "Home",
   description:
-    "Welcome to Siddhi Interiors — Vadodara's trusted destination for plywood, laminate, glass, UPVC, hardware, aluminium, handles, hinges, locks and wood. Shop quality interior materials online.",
+    "Welcome to SIDDHI — Palanpur's trusted destination for plywood, laminate, glass, UPVC, hardware, aluminium, handles, hinges, locks and wood. Shop quality interior materials online.",
   openGraph: {
-    title: "Siddhi Interiors — Premium Interior Materials, Vadodara",
+    title: "SIDDHI — Premium Interior Materials, Palanpur",
     description:
-      "Shop plywood, laminate, glass, UPVC, hardware, aluminium and more. Quality interior materials delivered across Vadodara and Gujarat.",
+      "Shop plywood, laminate, glass, UPVC, hardware, aluminium and more. Quality interior materials delivered across Palanpur and Gujarat.",
     url: "https://www.siddhiinteriors.com",
   },
   alternates: {
@@ -27,7 +27,7 @@ export default function Home() {
         <div className="justify-center items-center flex w-full">
           <Image
             src="/Background.jpg"
-            alt="Siddhi Interiors — Premium Interior Materials showroom, Vadodara"
+            alt="SIDDHI — Premium Interior Materials showroom, Palanpur"
             width={1800}
             height={1200}
             priority
@@ -38,7 +38,7 @@ export default function Home() {
             Welcome to
             <Image
               src="/s-text.svg"
-              alt="Siddhi Interiors"
+              alt="SIDDHI"
               width={250}
               height={220}
               priority

@@ -6,11 +6,11 @@ import ProjectsClient from "./ProjectsClient";
 export const metadata = {
   title: "Our Projects — Interior Design & Renovation Work",
   description:
-    "Browse completed interior design and renovation projects by Siddhi Interiors, Vadodara — kitchens, wardrobes, doors, sofas, site work and more. See our quality craftsmanship.",
+    "Browse completed interior design and renovation projects by SIDDHI, Palanpur — kitchens, wardrobes, doors, sofas, site work and more. See our quality craftsmanship.",
   openGraph: {
-    title: "Siddhi Interiors Projects — Interior Design Work in Vadodara",
+    title: "SIDDHI Projects — Interior Design Work in Palanpur",
     description:
-      "See our completed interior design projects in Vadodara — kitchens, wardrobes, doors, sofas, site work and more.",
+      "See our completed interior design projects in Palanpur — kitchens, wardrobes, doors, sofas, site work and more.",
     url: "https://www.siddhiinteriors.com/projects",
   },
   alternates: {

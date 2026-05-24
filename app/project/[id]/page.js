@@ -18,15 +18,15 @@ export async function generateMetadata({ params }) {
   const image = project.images?.[0];
 
   return {
-    title: `${project.title} | Siddhi Interiors`,
+    title: `${project.title} | SIDDHI`,
     description:
       project.description?.slice(0, 155) ||
-      `Explore the ${project.title} project — a showcase of modern design and craftsmanship by Siddhi Interiors.`,
+      `Explore the ${project.title} project — a showcase of modern design and craftsmanship by SIDDHI.`,
     keywords: [
       project.title,
       project.category,
       "interior design",
-      "Siddhi Interiors",
+      "SIDDHI",
       "furniture",
       "home decor",
     ]

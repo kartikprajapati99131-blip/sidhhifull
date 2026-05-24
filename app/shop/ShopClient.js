@@ -52,7 +52,7 @@ export default function ShopClient({ initialProducts, selectedType }) {
                     <img
                       src={p.image?.url}
                       // ✅ SEO FIX: descriptive alt text using product name and type
-                      alt={`${p.name} — ${selectedType || p.type} — Siddhi Interiors`}
+                      alt={`${p.name} — ${selectedType || p.type} — SIDDHI`}
                       className="object-contain w-32 h-32 mx-auto bg-gray-200 rounded-2xl mb-4 shadow-sm"
                     />
                     <h3 className="text-lg font-semibold">{p.name}</h3>

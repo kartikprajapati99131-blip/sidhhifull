@@ -8,11 +8,11 @@ import GoogleReviews from "@/components/GoogleReviews";
 export const metadata = {
   title: "About Us",
   description:
-    "Learn about Siddhi Interiors — Vadodara's trusted supplier of premium plywood, laminate, glass, UPVC and interior materials. Our story, mission, values and the brands we work with.",
+    "Learn about SIDDHI — Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC and interior materials. Our story, mission, values and the brands we work with.",
   openGraph: {
-    title: "About Siddhi Interiors — Our Story, Mission & Values",
+    title: "About SIDDHI — Our Story, Mission & Values",
     description:
-      "From a small plywood supplier to a complete interior materials destination. Learn about Siddhi Interiors, our values, and the premium brands we stock in Vadodara.",
+      "From a small plywood supplier to a complete interior materials destination. Learn about SIDDHI, our values, and the premium brands we stock in Palanpur.",
     url: "https://www.siddhiinteriors.com/about",
   },
   alternates: {

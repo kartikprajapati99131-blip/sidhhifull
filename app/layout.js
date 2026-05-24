@@ -24,11 +24,11 @@ export const metadata = {
     icon: "/JUST-LOGO.svg",
   },
   title: {
-    default: "Siddhi Interiors — Plywood, Laminate & Furniture Materials, Palanpur",
-    template: "%s | Siddhi Interiors",
+    default: "SIDDHI — Plywood, Laminate & Furniture Materials, Palanpur",
+    template: "%s | SIDDHI",
   },
   description:
-    "Siddhi Interiors is Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium, hardware, handles, hinges, locks and wood products for homes and businesses.",
+    "SIDDHI is Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium, hardware, handles, hinges, locks and wood products for homes and businesses.",
   keywords: [
     "plywood Palanpur",
     "laminate Palanpur",
@@ -37,7 +37,7 @@ export const metadata = {
     "UPVC windows Palanpur",
     "glass Palanpur",
     "hardware store Palanpur",
-    "Siddhi Interiors",
+    "SIDDHI",
     "wood suppliers Palanpur",
     "aluminium sections Palanpur",
   ],
@@ -47,8 +47,8 @@ export const metadata = {
     type: "website",
     locale: "en_IN",
     url: "https://www.siddhiinteriors.com",
-    siteName: "Siddhi Interiors",
-    title: "Siddhi Interiors — Plywood, Laminate & Furniture Materials, Palanpur",
+    siteName: "SIDDHI",
+    title: "SIDDHI — Plywood, Laminate & Furniture Materials, Palanpur",
     description:
       "Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium, hardware and wood products. Quality materials for homes and businesses.",
     images: [
@@ -56,13 +56,13 @@ export const metadata = {
         url: "/og-image.jpg", // 🔁 Add a 1200x630 image to your /public folder
         width: 1200,
         height: 630,
-        alt: "Siddhi Interiors — Premium Interior Materials, Palanpur",
+        alt: "SIDDHI — Premium Interior Materials, Palanpur",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Siddhi Interiors — Plywood, Laminate & Furniture Materials, Palanpur",
+    title: "SIDDHI — Plywood, Laminate & Furniture Materials, Palanpur",
     description:
       "Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium and hardware products.",
     images: ["/og-image.jpg"],
@@ -84,7 +84,7 @@ export const metadata = {
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
-  name: "Siddhi Interiors",
+  name: "SIDDHI",
   description:
     "Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium, hardware and wood products.",
   url: "https://www.siddhiinteriors.com",

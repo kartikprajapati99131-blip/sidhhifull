@@ -7,33 +7,35 @@ import connectDB from "@/db/connectDb";
 import Product from "@/models/product";
 
 const COVER_MAP = {
-  Plywood: { src: "/covers/PlywoodCover.png", alt: "Plywood products — Siddhi Interiors Vadodara" },
-  Laminate: { src: "/covers/LaminateCover.png", alt: "Laminate products — Siddhi Interiors Vadodara" },
-  Glass: { src: "/covers/GlassCover.png", alt: "Glass products — Siddhi Interiors Vadodara" },
-  UPVC: { src: "/covers/upvcCover.png", alt: "UPVC windows and doors — Siddhi Interiors Vadodara" },
-  Hardware: { src: "/covers/HardwareCover.png", alt: "Hardware products — Siddhi Interiors Vadodara" },
-  Aluminium: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — Siddhi Interiors Vadodara" },
-  Lock: { src: "/covers/LockCover.png", alt: "Lock products — Siddhi Interiors Vadodara" },
-  Handle: { src: "/covers/handleCover.png", alt: "Door handles — Siddhi Interiors Vadodara" },
-  Hinges: { src: "/covers/hingesCover.png", alt: "Hinges — Siddhi Interiors Vadodara" },
-  Wood: { src: "/covers/woodCover.png", alt: "Wood products — Siddhi Interiors Vadodara" },
+  Plywood: { src: "/covers/PlywoodCover.png", alt: "Plywood products — SIDDHI Palanpur" },
+  Laminate: { src: "/covers/LaminateCover.png", alt: "Laminate products — SIDDHI Palanpur" },
+  Glass: { src: "/covers/GlassCover.png", alt: "Glass products — SIDDHI Palanpur" },
+  UPVC: { src: "/covers/upvcCover.png", alt: "UPVC windows and doors — SIDDHI Palanpur" },
+  Hardware: { src: "/covers/HardwareCover.png", alt: "Hardware products — SIDDHI Palanpur" },
+  Aluminium: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — SIDDHI Palanpur" },
+  Lock: { src: "/covers/LockCover.png", alt: "Lock products — SIDDHI Palanpur" },
+  Handle: { src: "/covers/handleCover.png", alt: "Door handles — SIDDHI Palanpur" },
+  Hinges: { src: "/covers/hingesCover.png", alt: "Hinges — SIDDHI Palanpur" },
+  Wood: { src: "/covers/woodCover.png", alt: "Wood products — SIDDHI Palanpur" },
 };
 
-// ✅ SEO FIX: Dynamic metadata per category (Google shows the right title per filter)
+// ✅ FIX: await searchParams (required in Next.js 15+)
 export async function generateMetadata({ searchParams }) {
-  const type = searchParams?.type || "";
+  const resolvedParams = await searchParams;
+  const type = resolvedParams?.type || "";
+
   const title = type
-    ? `${type} Products — Buy ${type} in Vadodara`
-    : "Shop All Products — Interior Materials Vadodara";
+    ? `${type} Products — Buy ${type} in Palanpur`
+    : "Shop All Products — Interior Materials Palanpur";
   const description = type
-    ? `Buy premium ${type} products from Siddhi Interiors, Vadodara. Best quality ${type.toLowerCase()} at competitive prices. Fast delivery across Gujarat.`
-    : "Shop all interior materials at Siddhi Interiors — plywood, laminate, glass, UPVC, aluminium, hardware, handles, hinges, locks and wood. Vadodara's trusted interior supplier.";
+    ? `Buy premium ${type} products from SIDDHI, Palanpur. Best quality ${type.toLowerCase()} at competitive prices. Fast delivery across Gujarat.`
+    : "Shop all interior materials at SIDDHI — plywood, laminate, glass, UPVC, aluminium, hardware, handles, hinges, locks and wood. Palanpur's trusted interior supplier.";
 
   return {
     title,
     description,
     openGraph: {
-      title: `${title} | Siddhi Interiors`,
+      title: `${title} | SIDDHI`,
       description,
       url: `https://sidhhifull-l1oi.vercel.app/shop${type ? `?type=${type}` : ""}`,
       images: COVER_MAP[type]
@@ -45,9 +47,6 @@ export async function generateMetadata({ searchParams }) {
     },
   };
 }
-
-// ✅ SEO FIX: Fetch products on the server so HTML contains real product data
-
 
 async function getProducts(type) {
   try {
@@ -64,19 +63,22 @@ async function getProducts(type) {
     return [];
   }
 }
+
 export default async function ShopPage({ searchParams }) {
-  const type = searchParams?.type || "";
+  // ✅ FIX: await searchParams (required in Next.js 15+)
+  const resolvedParams = await searchParams;
+  const type = resolvedParams?.type || "";
+
   const products = await getProducts(type);
   const cover = COVER_MAP[type] || null;
 
-  // ✅ SEO FIX: Product list schema so Google shows products in search results
   const productListSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: type ? `${type} Products` : "All Products",
     description: type
-      ? `Premium ${type} products available at Siddhi Interiors, Vadodara`
-      : "All interior material products at Siddhi Interiors, Vadodara",
+      ? `Premium ${type} products available at SIDDHI, Palanpur`
+      : "All interior material products at SIDDHI, Palanpur",
     numberOfItems: products.length,
     itemListElement: products.slice(0, 10).map((p, i) => ({
       "@type": "ListItem",
@@ -91,7 +93,7 @@ export default async function ShopPage({ searchParams }) {
           price: p.price,
           priceCurrency: "INR",
           availability: "https://schema.org/InStock",
-          seller: { "@type": "Organization", name: "Siddhi Interiors" },
+          seller: { "@type": "Organization", name: "SIDDHI" },
         },
       },
     })),
@@ -99,13 +101,11 @@ export default async function ShopPage({ searchParams }) {
 
   return (
     <>
-      {/* ✅ SEO FIX: Structured data for product listings */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productListSchema) }}
       />
 
-      {/* ✅ SEO FIX: Static, server-rendered heading Google can read */}
       <div className="min-h-screen justify-center text-center">
         <h1 className="text-2xl font-bold mb-4 mt-10 gap-4">
           {type ? `Premium ${type} Products for Modern Living` : "All Products — Interior Materials"}
@@ -114,7 +114,6 @@ export default async function ShopPage({ searchParams }) {
           Durability you can trust. Quality you can feel.
         </p>
 
-        {/* ✅ SEO FIX: Cover image with descriptive alt text */}
         {cover && (
           <div className="max-w-7xl mx-auto">
             <img
@@ -127,7 +126,6 @@ export default async function ShopPage({ searchParams }) {
           </div>
         )}
 
-        {/* Client component handles cart, toast, and interactions */}
         <ShopClient initialProducts={products} selectedType={type} />
       </div>
     </>
