@@ -3,6 +3,7 @@
 
 import React from "react";
 import Link from "next/link";
+import GoogleReviews from "@/components/GoogleReviews";
 
 export const metadata = {
   title: "About Us",
