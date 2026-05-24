@@ -33,13 +33,13 @@ export async function generateMetadata({ searchParams }) {
     openGraph: {
       title: `${title} | Siddhi Interiors`,
       description,
-      url: `https://www.siddhiinteriors.com/shop${type ? `?type=${type}` : ""}`,
+      url: `https://sidhhifull-l1oi.vercel.app/shop${type ? `?type=${type}` : ""}`,
       images: COVER_MAP[type]
         ? [{ url: COVER_MAP[type].src, alt: COVER_MAP[type].alt }]
         : undefined,
     },
     alternates: {
-      canonical: `https://www.siddhiinteriors.com/shop${type ? `?type=${type}` : ""}`,
+      canonical: `https://sidhhifull-l1oi.vercel.app/shop${type ? `?type=${type}` : ""}`,
     },
   };
 }
@@ -47,7 +47,7 @@ export async function generateMetadata({ searchParams }) {
 // ✅ SEO FIX: Fetch products on the server so HTML contains real product data
 async function getProducts(type) {
   try {
-    const url = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/type${type ? `?type=${type}` : ""}`;
+    const url = `${process.env.NEXTAUTH_URL || "https://sidhhifull-l1oi.vercel.app/"}/api/type${type ? `?type=${type}` : ""}`;
     const res = await fetch(url, { next: { revalidate: 60 } }); // revalidate every 60s
     if (!res.ok) return [];
     const data = await res.json();

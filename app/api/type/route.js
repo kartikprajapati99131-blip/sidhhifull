@@ -1,6 +1,5 @@
 import connectDB from "@/db/connectDb";
 import Product from "@/models/product";
-import { requireAdmin } from "@/lib/auth";
 
 export async function GET(req) {
   try {
