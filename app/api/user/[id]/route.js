@@ -34,7 +34,6 @@ export async function GET(req, { params }) {
 
 // ✅ PUT — your existing code, unchanged
 export async function PUT(req, { params }) {
-    console.log(params);
     try {
         const { id } = await params;
 

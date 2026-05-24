@@ -22,7 +22,6 @@ export default function ReviewPage() {
         fetch(`/api/user/${id}`)
             .then((r) => r.json())
             .then((d) => {
-                console.log("Staff data:", d);
                 setStaff(d?.user || d); // handle both { user: {...} } or direct object
             })
             .catch(() => setError("Could not load staff info."));
@@ -50,7 +49,6 @@ export default function ReviewPage() {
                 }),
             });
             const data = await res.json();
-            console.log("Review response:", data);
             if (!res.ok) throw new Error(data.error || "Failed");
             setSubmitted(true);
         } catch (err) {

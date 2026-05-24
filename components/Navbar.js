@@ -15,7 +15,6 @@ const Navbar = ({ }) => {
     const isArcitect = session?.user?.role === "architect";
     const isUser = session?.user?.role === "user";
 
-    console.log(session?.user.id);
 
     const dropdownRef = useRef(null);
     return (
