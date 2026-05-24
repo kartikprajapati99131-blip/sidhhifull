@@ -3,18 +3,20 @@
 // All interactive logic (add to cart, toast) stays in ShopClient below.
 
 import ShopClient from "./ShopClient";
+import connectDB from "@/db/connectDb";
+import Product from "@/models/product";
 
 const COVER_MAP = {
-  Plywood:   { src: "/covers/PlywoodCover.png",     alt: "Plywood products — Siddhi Interiors Vadodara" },
-  Laminate:  { src: "/covers/LaminateCover.png",    alt: "Laminate products — Siddhi Interiors Vadodara" },
-  Glass:     { src: "/covers/GlassCover.png",       alt: "Glass products — Siddhi Interiors Vadodara" },
-  UPVC:      { src: "/covers/upvcCover.png",        alt: "UPVC windows and doors — Siddhi Interiors Vadodara" },
-  Hardware:  { src: "/covers/HardwareCover.png",    alt: "Hardware products — Siddhi Interiors Vadodara" },
-  Aluminium: { src: "/covers/AllumimiumCover.png",  alt: "Aluminium sections — Siddhi Interiors Vadodara" },
-  Lock:      { src: "/covers/LockCover.png",        alt: "Lock products — Siddhi Interiors Vadodara" },
-  Handle:    { src: "/covers/handleCover.png",      alt: "Door handles — Siddhi Interiors Vadodara" },
-  Hinges:    { src: "/covers/hingesCover.png",      alt: "Hinges — Siddhi Interiors Vadodara" },
-  Wood:      { src: "/covers/woodCover.png",        alt: "Wood products — Siddhi Interiors Vadodara" },
+  Plywood: { src: "/covers/PlywoodCover.png", alt: "Plywood products — Siddhi Interiors Vadodara" },
+  Laminate: { src: "/covers/LaminateCover.png", alt: "Laminate products — Siddhi Interiors Vadodara" },
+  Glass: { src: "/covers/GlassCover.png", alt: "Glass products — Siddhi Interiors Vadodara" },
+  UPVC: { src: "/covers/upvcCover.png", alt: "UPVC windows and doors — Siddhi Interiors Vadodara" },
+  Hardware: { src: "/covers/HardwareCover.png", alt: "Hardware products — Siddhi Interiors Vadodara" },
+  Aluminium: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — Siddhi Interiors Vadodara" },
+  Lock: { src: "/covers/LockCover.png", alt: "Lock products — Siddhi Interiors Vadodara" },
+  Handle: { src: "/covers/handleCover.png", alt: "Door handles — Siddhi Interiors Vadodara" },
+  Hinges: { src: "/covers/hingesCover.png", alt: "Hinges — Siddhi Interiors Vadodara" },
+  Wood: { src: "/covers/woodCover.png", alt: "Wood products — Siddhi Interiors Vadodara" },
 };
 
 // ✅ SEO FIX: Dynamic metadata per category (Google shows the right title per filter)
@@ -45,19 +47,23 @@ export async function generateMetadata({ searchParams }) {
 }
 
 // ✅ SEO FIX: Fetch products on the server so HTML contains real product data
+
+
 async function getProducts(type) {
   try {
-    const base = (process.env.NEXTAUTH_URL || "https://sidhhifull-l1oi.vercel.app").replace(/\/$/, "");
-    const url = `${base}/api/type${type ? `?type=${type}` : ""}`;
-    const res = await fetch(url, { next: { revalidate: 60 } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    await connectDB();
+    const query = type ? { type } : {};
+    const products = await Product.find(query).lean();
+    return products.map((p) => ({
+      ...p,
+      _id: p._id.toString(),
+      createdAt: p.createdAt?.toString() || null,
+      updatedAt: p.updatedAt?.toString() || null,
+    }));
   } catch {
     return [];
   }
 }
-
 export default async function ShopPage({ searchParams }) {
   const type = searchParams?.type || "";
   const products = await getProducts(type);
