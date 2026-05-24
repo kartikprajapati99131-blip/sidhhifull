@@ -71,10 +71,10 @@ function exportExcel(customers) {
     const ws   = XLSX.utils.json_to_sheet(rows);
 
     // Column widths
-    ws["!cols"] = [
-        { wch: 25 }, { wch: 15 }, { wch: 35 },
-        { wch: 30 }, { wch: 20 }, { wch: 12 }, { wch: 14 },
-    ];
+   ws["!cols"] = [
+    { wch: 25 },
+    { wch: 18 },
+];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Customers");
