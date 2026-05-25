@@ -5,8 +5,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getDistance } from "@/lib/distance";
 
 const OFFICE = {
-  lat: 24.1654,
-  lng: 72.4328
+  lat: 24.1684,
+  lng: 72.4329
   ,
 };
 
