@@ -15,6 +15,24 @@ export async function PUT(req) {
       );
     }
 
+    // If images are being updated, ensure at least one is provided
+    if (data.images !== undefined) {
+      if (!Array.isArray(data.images) || data.images.length === 0) {
+        return Response.json(
+          { success: false, message: "Product must have at least one image." },
+          { status: 400 }
+        );
+      }
+      for (const img of data.images) {
+        if (!img.url) {
+          return Response.json(
+            { success: false, message: "Each image must have a valid URL." },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     await connectDB();
 
     const updated = await Product.findByIdAndUpdate(id, data, {

@@ -6,29 +6,45 @@ import ShopClient from "./ShopClient";
 import connectDB from "@/db/connectDb";
 import Product from "@/models/product";
 
+// ✅ FIX: Key uses "AluminiumSection" to match the schema enum exactly.
 const COVER_MAP = {
   Plywood: { src: "/covers/PlywoodCover.png", alt: "Plywood products — SIDDHI Palanpur" },
   Laminate: { src: "/covers/LaminateCover.png", alt: "Laminate products — SIDDHI Palanpur" },
   Glass: { src: "/covers/GlassCover.png", alt: "Glass products — SIDDHI Palanpur" },
   UPVC: { src: "/covers/upvcCover.png", alt: "UPVC windows and doors — SIDDHI Palanpur" },
   Hardware: { src: "/covers/HardwareCover.png", alt: "Hardware products — SIDDHI Palanpur" },
-  Aluminium: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — SIDDHI Palanpur" },
+  AluminiumSection: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — SIDDHI Palanpur" },
   Lock: { src: "/covers/LockCover.png", alt: "Lock products — SIDDHI Palanpur" },
   Handle: { src: "/covers/handleCover.png", alt: "Door handles — SIDDHI Palanpur" },
   Hinges: { src: "/covers/hingesCover.png", alt: "Hinges — SIDDHI Palanpur" },
   Wood: { src: "/covers/woodCover.png", alt: "Wood products — SIDDHI Palanpur" },
 };
 
+// ✅ FIX: Human-readable display labels for each type used in headings / meta.
+const TYPE_LABEL = {
+  Plywood: "Plywood",
+  Laminate: "Laminate",
+  Glass: "Glass",
+  UPVC: "UPVC",
+  Hardware: "Hardware",
+  AluminiumSection: "Aluminium Section",
+  Lock: "Lock",
+  Handle: "Handle",
+  Hinges: "Hinges",
+  Wood: "Wood",
+};
+
 // ✅ FIX: await searchParams (required in Next.js 15+)
 export async function generateMetadata({ searchParams }) {
   const resolvedParams = await searchParams;
   const type = resolvedParams?.type || "";
+  const label = TYPE_LABEL[type] || type;
 
   const title = type
-    ? `${type} Products — Buy ${type} in Palanpur`
+    ? `${label} Products — Buy ${label} in Palanpur`
     : "Shop All Products — Interior Materials Palanpur";
   const description = type
-    ? `Buy premium ${type} products from SIDDHI, Palanpur. Best quality ${type.toLowerCase()} at competitive prices. Fast delivery across Gujarat.`
+    ? `Buy premium ${label} products from SIDDHI, Palanpur. Best quality ${label.toLowerCase()} at competitive prices. Fast delivery across Gujarat.`
     : "Shop all interior materials at SIDDHI — plywood, laminate, glass, UPVC, aluminium, hardware, handles, hinges, locks and wood. Palanpur's trusted interior supplier.";
 
   return {
@@ -58,6 +74,8 @@ async function getProducts(type) {
       _id: p._id.toString(),
       createdAt: p.createdAt?.toString() || null,
       updatedAt: p.updatedAt?.toString() || null,
+      // ✅ FIX: .lean() bypasses toJSON transform — normalize images for old docs
+      images: Array.isArray(p.images) ? p.images : [],
     }));
   } catch {
     return [];
@@ -68,6 +86,7 @@ export default async function ShopPage({ searchParams }) {
   // ✅ FIX: await searchParams (required in Next.js 15+)
   const resolvedParams = await searchParams;
   const type = resolvedParams?.type || "";
+  const label = TYPE_LABEL[type] || type;
 
   const products = await getProducts(type);
   const cover = COVER_MAP[type] || null;
@@ -75,28 +94,36 @@ export default async function ShopPage({ searchParams }) {
   const productListSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: type ? `${type} Products` : "All Products",
+    name: type ? `${label} Products` : "All Products",
     description: type
-      ? `Premium ${type} products available at SIDDHI, Palanpur`
+      ? `Premium ${label} products available at SIDDHI, Palanpur`
       : "All interior material products at SIDDHI, Palanpur",
     numberOfItems: products.length,
-    itemListElement: products.slice(0, 10).map((p, i) => ({
-      "@type": "ListItem",
-      position: i + 1,
-      item: {
-        "@type": "Product",
-        name: p.name,
-        description: p.description,
-        image: p.image?.url,
-        offers: {
-          "@type": "Offer",
-          price: p.price,
-          priceCurrency: "INR",
-          availability: "https://schema.org/InStock",
-          seller: { "@type": "Organization", name: "SIDDHI" },
+    itemListElement: products.slice(0, 10).map((p, i) => {
+      // For variant products, use the lowest variant price in the schema.
+      const hasVariants = Array.isArray(p.variants) && p.variants.length > 0;
+      const schemaPrice = hasVariants
+        ? Math.min(...p.variants.map((v) => v.price).filter(Boolean))
+        : p.price;
+
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "Product",
+          name: p.name,
+          description: p.description,
+          image: p.images?.[0]?.url ?? p.image?.url,
+          offers: {
+            "@type": "Offer",
+            price: schemaPrice ?? 0,
+            priceCurrency: "INR",
+            availability: "https://schema.org/InStock",
+            seller: { "@type": "Organization", name: "SIDDHI" },
+          },
         },
-      },
-    })),
+      };
+    }),
   };
 
   return (
@@ -108,7 +135,9 @@ export default async function ShopPage({ searchParams }) {
 
       <div className="min-h-screen justify-center text-center">
         <h1 className="text-2xl font-bold mb-4 mt-10 gap-4">
-          {type ? `Premium ${type} Products for Modern Living` : "All Products — Interior Materials"}
+          {type
+            ? `Premium ${label} Products for Modern Living`
+            : "All Products — Interior Materials"}
         </h1>
         <p className="text-sm md:text-lg opacity-90 mb-4">
           Durability you can trust. Quality you can feel.

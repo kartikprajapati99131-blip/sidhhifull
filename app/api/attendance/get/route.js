@@ -14,12 +14,29 @@ export async function GET(req) {
   if (!userId) {
     await requireAdmin();
     const attendance = await Attendance.find().lean();
-    const users = await User.find().lean();
 
-    const result = attendance.map((att) => {
-      const user = users.find((u) => u._id.toString() === att.userId);
-      return { ...att, userName: user?.name || "Unknown", email: user?.email || "" };
-    });
+    // Fetch ALL users — no role filter
+    const users = await User.find().select("_id name email role").lean();
+
+    // Build a map for O(1) lookup
+    const userMap = {};
+    for (const u of users) {
+      userMap[u._id.toString()] = u;
+    }
+
+    const result = attendance
+      .map((att) => {
+        const user = userMap[att.userId];
+        // If user no longer exists or is not staff, skip this record
+        if (!user || user.role !== "staff") return null;
+        return {
+          ...att,
+          userName: user.name,
+          email: user.email,
+          role: user.role,
+        };
+      })
+      .filter(Boolean); // remove nulls
 
     return Response.json(result);
   }

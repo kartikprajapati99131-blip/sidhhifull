@@ -5,23 +5,64 @@ import { useState } from "react";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import AllProduct from "@/components/allproduct";
 
-// ── Put your WhatsApp number here (with country code, no + or spaces) ──
-const WHATSAPP_NUMBER = "919999999999";
+const WHATSAPP_NUMBER = "919023238916";
+
+const TYPE_LABEL = {
+  Plywood: "Plywood",
+  Laminate: "Laminate",
+  Glass: "Glass",
+  UPVC: "UPVC",
+  Hardware: "Hardware",
+  AluminiumSection: "Aluminium Section",
+  Lock: "Lock",
+  Handle: "Handle",
+  Hinges: "Hinges",
+  Wood: "Wood",
+};
 
 export default function ProductClient({ product }) {
   const { addToCart } = useCart();
 
-  const images = product.images?.length
-    ? product.images
+  const hasVariants =
+    Array.isArray(product.variants) && product.variants.length > 0;
+
+  // ✅ FIX: Correctly read images array; fallback to legacy image.url field
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images.map((img) => (typeof img === "string" ? img : img.url))
     : product.image?.url
     ? [product.image.url]
     : [];
 
-  const [selectedImage, setSelectedImage] = useState(images[0] || "");
+  const [selectedImage, setSelectedImage]   = useState(images[0] || "");
+  const [selectedVariant, setSelectedVariant] = useState(
+    hasVariants ? product.variants[0] : null
+  );
+
+  const priceDisplay = hasVariants
+    ? selectedVariant
+      ? { amount: selectedVariant.price, unit: selectedVariant.unit }
+      : null
+    : product.price != null
+    ? { amount: product.price, unit: product.priceUnit || null }
+    : null;
+
+  const typeLabel = TYPE_LABEL[product.type] || product.type;
 
   // ── Add to cart ──────────────────────────────────────────────────────────
   const handleAddToCart = () => {
-    addToCart(product);
+    const cartItem = hasVariants
+      ? {
+          ...product,
+          price: selectedVariant?.price,
+          selectedVariant: selectedVariant?.label,
+          // ✅ FIX: pass cover image so cart page can show it
+          image: { url: images[0] || "" },
+        }
+      : {
+          ...product,
+          image: { url: images[0] || "" },
+        };
+    addToCart(cartItem);
     toast.success(`${product.name} added to cart`, {
       position: "top-right",
       autoClose: 5000,
@@ -35,18 +76,23 @@ export default function ProductClient({ product }) {
   };
 
   // ── WhatsApp enquiry ─────────────────────────────────────────────────────
-  // NOTE: WhatsApp doesn't embed images in the pre-filled message text, but
-  // we include the direct image URL so the recipient can open it instantly.
   const handleWhatsAppEnquiry = () => {
     const pageUrl =
       typeof window !== "undefined" ? window.location.href : "";
+
+    const priceText = priceDisplay
+      ? `₹${priceDisplay.amount}${priceDisplay.unit ? ` / ${priceDisplay.unit}` : ""}`
+      : "Contact for price";
 
     const message = [
       `Hi! I'm interested in the following product:`,
       ``,
       `🛍️ *${product.name}*`,
-      product.type ? `📦 Category: ${product.type}` : null,
-      `💰 Price: ₹${product.price}`,
+      product.type ? `📦 Category: ${typeLabel}` : null,
+      hasVariants && selectedVariant
+        ? `📐 Size / Option: ${selectedVariant.label}`
+        : null,
+      `💰 Price: ${priceText}`,
       product.description
         ? `📝 Description: ${product.description}`
         : null,
@@ -120,7 +166,11 @@ export default function ProductClient({ product }) {
                 className="absolute inset-0 w-full h-full object-cover"
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
+                <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
                 No image
               </div>
             )}
@@ -135,48 +185,95 @@ export default function ProductClient({ product }) {
             {product.name}
           </h1>
 
-          {/* Price */}
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-3xl font-semibold text-green-600">
-              ₹{product.price}
+          {/* Type badge */}
+          {product.type && (
+            <span className="self-start text-xs font-medium bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+              {typeLabel}
             </span>
-           
+          )}
+
+          {/* ── Variant selector ─────────────────────────────────────────── */}
+          {hasVariants && (
+            <div className="mt-1">
+              <p className="text-sm font-semibold text-gray-600 mb-2">
+                Select Size / Option
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {product.variants.map((v, i) => {
+                  const isSelected = selectedVariant?.label === v.label;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedVariant(v)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all duration-150 ${
+                        isSelected
+                          ? "border-green-500 bg-green-50 text-green-700 shadow-sm"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
+                      {v.label}
+                      <span className="ml-1.5 text-xs text-gray-500 font-normal">
+                        ₹{v.price}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Price */}
+          <div className="flex items-baseline gap-2 mt-2">
+            {priceDisplay ? (
+              <>
+                <span className="text-3xl font-semibold text-green-600">
+                  ₹{priceDisplay.amount}
+                </span>
+                {priceDisplay.unit && (
+                  <span className="text-gray-400 text-sm">
+                    / {priceDisplay.unit}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-gray-400 text-lg">
+                Contact for price
+              </span>
+            )}
           </div>
 
           {/* Description */}
-          <p className="text-gray-600 leading-relaxed mt-3">
-            {product.description}
-          </p>
+          {product.description && (
+            <p className="text-gray-600 leading-relaxed mt-3">
+              {product.description}
+            </p>
+          )}
           <p className="text-gray-500 leading-relaxed text-sm italic">
-            "Crafted with premium materials, this {product.type} ensures
+            &ldquo;Crafted with premium materials, this {typeLabel} ensures
             durability, comfort, and everyday performance. Designed for modern
-            needs."
+            needs.&rdquo;
           </p>
-
-          {/* Highlights */}
-          
 
           {/* CTA Buttons */}
           <div className="flex flex-col gap-3 mt-6">
             {/* Add to Cart */}
-            {/* <button
+            <button
               onClick={handleAddToCart}
-              className="border bg-green-500 hover:bg-green-600 active:scale-[0.98] text-white py-3 rounded-xl font-semibold transition-all duration-150"
+              className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-700 text-white active:scale-[0.98] py-3 rounded-xl font-semibold transition-all duration-150"
             >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
               Add to Cart
-            </button> */}
+            </button>
 
             {/* WhatsApp Enquiry */}
             <button
               onClick={handleWhatsAppEnquiry}
               className="flex items-center justify-center gap-2 border-2 border-[#25D366] text-[#25D366] hover:bg-[#25D366] hover:text-white active:scale-[0.98] py-3 rounded-xl font-semibold transition-all duration-150"
             >
-              {/* WhatsApp icon */}
-              <svg
-                className="w-5 h-5"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
                 <path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.558 4.122 1.532 5.855L.064 23.446a.5.5 0 00.608.607l5.67-1.484A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.655-.502-5.184-1.38l-.37-.217-3.834 1.004 1.02-3.733-.236-.386A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
               </svg>
@@ -191,6 +288,7 @@ export default function ProductClient({ product }) {
         </div>
       </div>
 
+      {/* Related products */}
       <AllProduct type={product.type} />
     </>
   );

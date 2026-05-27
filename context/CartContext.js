@@ -1,17 +1,37 @@
 "use client";
-import { createContext, useContext, useState } from "react";
-import { useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
-  const [cart, setCart] = useState([]);
+  const [cart, setCart]         = useState([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  // ✅ Load cart from localStorage on first mount (persists across page refreshes)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cart");
+      if (saved) setCart(JSON.parse(saved));
+    } catch {
+      // localStorage unavailable (SSR safety) — start with empty cart
+    }
+    setHydrated(true);
+  }, []);
+
+  // ✅ Save cart to localStorage on every change
+  useEffect(() => {
+    if (!hydrated) return; // Don't overwrite on first render before load
+    try {
+      localStorage.setItem("cart", JSON.stringify(cart));
+    } catch {
+      // Ignore write errors (private browsing quota)
+    }
+  }, [cart, hydrated]);
 
   // ➕ Add to cart
   const addToCart = (product) => {
     setCart((prev) => {
       const exist = prev.find((item) => item._id === product._id);
-
       if (exist) {
         return prev.map((item) =>
           item._id === product._id
@@ -19,7 +39,6 @@ export const CartProvider = ({ children }) => {
             : item
         );
       }
-
       return [...prev, { ...product, qty: 1 }];
     });
   };
@@ -49,25 +68,11 @@ export const CartProvider = ({ children }) => {
     );
   };
 
+  // 🗑️ Clear cart
+  const clearCart = () => setCart([]);
+
   // 💰 Total price
-  const total = cart.reduce(
-    (acc, item) => acc + item.price * item.qty,
-    0
-  );
-
-const clearCart = () => {
-  setCart([]);
-};
-  // Load cart
-  useEffect(() => {
-    const saved = localStorage.getItem("cart");
-    if (saved) setCart(JSON.parse(saved));
-  }, []);
-
-  // Save cart
-  useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(cart));
-  }, [cart]);
+  const total = cart.reduce((acc, item) => acc + (item.price || 0) * item.qty, 0);
 
   return (
     <CartContext.Provider
@@ -78,7 +83,7 @@ const clearCart = () => {
         increaseQty,
         decreaseQty,
         total,
-        clearCart
+        clearCart,
       }}
     >
       {children}
