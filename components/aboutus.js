@@ -13,10 +13,10 @@ export const metadata = {
     title: "About SIDDHI — Our Story, Mission & Values",
     description:
       "From a small plywood supplier to a complete interior materials destination. Learn about SIDDHI, our values, and the premium brands we stock in Palanpur.",
-    url: "https://www.siddhiinteriors.com/about",
+    url: "https://siddhionline.com/about",
   },
   alternates: {
-    canonical: "https://www.siddhiinteriors.com/about",
+    canonical: "https://siddhionline.com/about",
   },
 };
 

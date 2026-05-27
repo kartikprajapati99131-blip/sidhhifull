@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 
 // ✅ SEO FIX: Full metadata with OG tags, Twitter cards, and keywords
 export const metadata = {
-  metadataBase: new URL("https://www.siddhiinteriors.com"), // 🔁 Replace with your actual domain
+  metadataBase: new URL("https://siddhionline.com"), // 🔁 Replace with your actual domain
   icons: {
     icon: "/JUST-LOGO.svg",
   },
@@ -46,7 +46,7 @@ export const metadata = {
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://www.siddhiinteriors.com",
+    url: "https://siddhionline.com",
     siteName: "SIDDHI",
     title: "SIDDHI — Plywood, Laminate & Furniture Materials, Palanpur",
     description:
@@ -87,9 +87,9 @@ const organizationSchema = {
   name: "SIDDHI",
   description:
     "Palanpur's trusted supplier of premium plywood, laminate, glass, UPVC, aluminium, hardware and wood products.",
-  url: "https://www.siddhiinteriors.com",
-  logo: "https://www.siddhiinteriors.com/JUST-LOGO.svg",
-  image: "https://www.siddhiinteriors.com/og-image.jpg",
+  url: "https://siddhionline.com",
+  logo: "https://siddhionline.com/JUST-LOGO.svg",
+  image: "https://siddhionline.com/og-image.jpg",
   telephone: "+91-9023238916", // 🔁 Replace with real phone
   email: "info@siddhiinteriors.com", // 🔁 Replace with real email
   address: {

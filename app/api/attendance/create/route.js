@@ -4,17 +4,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getDistance } from "@/lib/distance";
 
+// ✅ Exact office coordinates (SIDDHI GLASS & PLYWOOD CENTER)
 const OFFICE = {
-  lat: 24.1684,
-  lng: 72.4329
-  ,
+  lat: 24.168452,
+  lng: 72.4329712,
 };
 
-const ALLOWED_RADIUS = 100;
+// ✅ Tightened to 50 meters — covers building, not the street outside
+const ALLOWED_RADIUS = 50;
 
 export async function POST(req) {
   await connectDb();
-
 
   const session = await getServerSession(authOptions);
 
@@ -24,7 +24,15 @@ export async function POST(req) {
 
   const body = await req.json();
 
-  // ✅ 1. Distance Check
+  // ✅ Validate lat/lng are present in request
+  if (body.lat == null || body.lng == null) {
+    return Response.json(
+      { error: "Location not provided" },
+      { status: 400 }
+    );
+  }
+
+  // ✅ Distance Check
   const distance = getDistance(
     body.lat,
     body.lng,
@@ -34,7 +42,9 @@ export async function POST(req) {
 
   if (distance > ALLOWED_RADIUS) {
     return Response.json(
-      { error: "You are outside allowed area" },
+      {
+        error: `You are outside the office building (${Math.round(distance)}m away, allowed: ${ALLOWED_RADIUS}m)`,
+      },
       { status: 400 }
     );
   }
@@ -52,7 +62,7 @@ export async function POST(req) {
   if (body.type === "entry") {
     if (record && record.entryTime) {
       return Response.json(
-        { error: "Already checked in" },
+        { error: "Already checked in today" },
         { status: 400 }
       );
     }
@@ -74,14 +84,14 @@ export async function POST(req) {
   if (body.type === "exit") {
     if (!record || !record.entryTime) {
       return Response.json(
-        { error: "No entry found" },
+        { error: "No entry found for today" },
         { status: 400 }
       );
     }
 
     if (record.exitTime) {
       return Response.json(
-        { error: "Already checked out" },
+        { error: "Already checked out today" },
         { status: 400 }
       );
     }
@@ -104,8 +114,5 @@ export async function POST(req) {
     });
   }
 
-  return Response.json(
-    { error: "Invalid type" },
-    { status: 400 }
-  );
+  return Response.json({ error: "Invalid type" }, { status: 400 });
 }

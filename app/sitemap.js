@@ -1,9 +1,9 @@
 // ✅ SEO FIX: sitemap.js
 // Next.js automatically serves this as /sitemap.xml
 // Submit this URL to Google Search Console after deploying.
-// 🔁 Replace "https://www.siddhiinteriors.com" with your real domain everywhere.
+// 🔁 Replace "https://siddhionline.com" with your real domain everywhere.
 
-const BASE_URL = "https://www.siddhiinteriors.com";
+const BASE_URL = "https://siddhionline.com/";
 
 const PRODUCT_TYPES = [
   "Plywood",

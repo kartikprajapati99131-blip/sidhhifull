@@ -11,10 +11,10 @@ export const metadata = {
     title: "SIDDHI Projects — Interior Design Work in Palanpur",
     description:
       "See our completed interior design projects in Palanpur — kitchens, wardrobes, doors, sofas, site work and more.",
-    url: "https://www.siddhiinteriors.com/projects",
+    url: "https://siddhionline.com/projects",
   },
   alternates: {
-    canonical: "https://www.siddhiinteriors.com/projects",
+    canonical: "https://siddhionline.com/projects",
   },
 };
 

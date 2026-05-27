@@ -1,7 +1,7 @@
 // ✅ SEO FIX: robots.js
 // Next.js automatically serves this as /robots.txt
 // Allows Google to crawl public pages, blocks admin/internal pages.
-// 🔁 Replace "https://www.siddhiinteriors.com" with your real domain.
+// 🔁 Replace "https://siddhionline.com" with your real domain.
 
 export default function robots() {
   return {
@@ -29,6 +29,6 @@ export default function robots() {
         ],
       },
     ],
-    sitemap: "https://www.siddhiinteriors.com/sitemap.xml",
+    sitemap: "https://siddhionline.com/sitemap.xml",
   };
 }

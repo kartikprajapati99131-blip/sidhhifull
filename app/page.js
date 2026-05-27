@@ -13,10 +13,10 @@ export const metadata = {
     title: "SIDDHI — Premium Interior Materials, Palanpur",
     description:
       "Shop plywood, laminate, glass, UPVC, hardware, aluminium and more. Quality interior materials delivered across Palanpur and Gujarat.",
-    url: "https://www.siddhiinteriors.com",
+    url: "https://siddhionline.com",
   },
   alternates: {
-    canonical: "https://www.siddhiinteriors.com",
+    canonical: "https://siddhionline.com",
   },
 };
 
