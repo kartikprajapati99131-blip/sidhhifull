@@ -12,6 +12,9 @@ const EMPTY_FORM = {
   bloodGroup: "", religion: "",
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const cap = (v) => (typeof v === "string" ? v.toUpperCase() : v);
+
 // ── Shared UI ────────────────────────────────────────────────────────────────
 function Field({ label, required, children, className = "" }) {
   return (
@@ -27,7 +30,7 @@ function Field({ label, required, children, className = "" }) {
 const inputCls =
   "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white " +
   "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent " +
-  "placeholder:text-slate-300 transition";
+  "placeholder:text-slate-300 transition uppercase";
 
 function Spinner({ size = 16 }) {
   return (
@@ -38,9 +41,33 @@ function Spinner({ size = 16 }) {
   );
 }
 
-// ── Customer Detail Popup ────────────────────────────────────────────────────
-function CustomerPopup({ customer, onClose, onDeleted, isAdmin }) {
+// ── 404 Page ─────────────────────────────────────────────────────────────────
+function NotFoundPage() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-center max-w-sm px-6">
+        <p className="text-8xl font-black text-slate-200 select-none leading-none">404</p>
+        <p className="text-5xl mt-2 mb-4">🚫</p>
+        <h2 className="font-bold text-slate-800 text-xl mb-2">Page Not Found</h2>
+        <p className="text-slate-500 text-sm">
+          You don't have permission to view this page, or this page doesn't exist.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Customer Detail / Edit Popup ─────────────────────────────────────────────
+function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdated, isAdmin }) {
+  const [customer, setCustomer] = useState(initialCustomer);
+  const [editing,  setEditing]  = useState(false);
+  const [draft,    setDraft]    = useState({ ...initialCustomer });
+  const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const setD = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const setDCap = (k, v) => setDraft(d => ({ ...d, [k]: cap(v) }));
 
   async function handleDelete() {
     if (!confirm("Delete this customer permanently?")) return;
@@ -51,61 +78,184 @@ function CustomerPopup({ customer, onClose, onDeleted, isAdmin }) {
     else alert("Delete failed.");
   }
 
+  async function handleSave() {
+    setSaveError("");
+    if (!draft.firstName?.trim()) { setSaveError("First name is required."); return; }
+    if (!draft.lastName?.trim())  { setSaveError("Last name is required."); return; }
+
+    setSaving(true);
+    const res  = await fetch(`/api/customers/${customer._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    const data = await res.json();
+    setSaving(false);
+
+    if (res.ok) {
+      const updated = data.customer || { ...customer, ...draft };
+      setCustomer(updated);
+      setDraft({ ...updated });
+      setEditing(false);
+      if (onUpdated) onUpdated(updated);
+    } else {
+      setSaveError(data.error || "Save failed.");
+    }
+  }
+
+  function handleCancelEdit() {
+    setDraft({ ...customer });
+    setEditing(false);
+    setSaveError("");
+  }
+
+  // ── Read-only row ───────────────────────────────────────────────────────────
   const Row = ({ label, value }) =>
     value ? (
       <div className="flex gap-2 py-1.5 border-b border-slate-100 last:border-0">
         <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
-        <span className="text-sm text-slate-700 font-medium">{value}</span>
+        <span className="text-sm text-slate-700 font-medium uppercase">{value}</span>
       </div>
     ) : null;
+
+  // ── Edit input inside popup ─────────────────────────────────────────────────
+  const popupInputCls =
+    "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
+    "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
+
+  const EField = ({ label, field, type = "text", maxLen }) => (
+    <div className="flex gap-2 py-1.5 border-b border-slate-100 last:border-0 items-center">
+      <span className="text-xs text-slate-400 w-28 shrink-0">{label}</span>
+      {type === "select-blood" ? (
+        <select
+          value={draft[field] || ""}
+          onChange={e => setD(field, e.target.value)}
+          className={popupInputCls}
+        >
+          {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b || "— Select —"}</option>)}
+        </select>
+      ) : (
+        <input
+          type={type}
+          inputMode={type === "tel" ? "numeric" : undefined}
+          maxLength={maxLen}
+          value={draft[field] || ""}
+          onChange={e => setDCap(field, e.target.value)}
+          className={popupInputCls}
+        />
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="bg-sky-500 px-6 py-4 flex items-center justify-between">
+        {/* Header */}
+        <div className={`px-6 py-4 flex items-center justify-between ${editing ? "bg-amber-500" : "bg-sky-500"}`}>
           <div>
-            <p className="text-xs text-sky-100 uppercase tracking-widest mb-0.5">Customer Found</p>
-            <h2 className="text-lg font-bold text-white">
+            <p className={`text-xs uppercase tracking-widest mb-0.5 ${editing ? "text-amber-100" : "text-sky-100"}`}>
+              {editing ? "Editing Customer" : "Customer Found"}
+            </p>
+            <h2 className="text-lg font-bold text-white uppercase">
               {customer.firstName} {customer.middleName} {customer.lastName}
             </h2>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none">&times;</button>
         </div>
-        <div className="px-6 py-4 max-h-[65vh] overflow-y-auto">
-          {customer.category && (
-            <span className="inline-block mb-3 px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full text-xs font-semibold border border-sky-200">
+
+        {/* Body */}
+        <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+          {!editing && customer.category && (
+            <span className="inline-block mb-3 px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full text-xs font-semibold border border-sky-200 uppercase">
               {customer.category}
             </span>
           )}
-          <Row label="Primary Mobile"   value={customer.mobile1} />
-          <Row label="Secondary Mobile" value={customer.mobile2} />
-          <Row label="Address 1"        value={customer.address1} />
-          <Row label="Address 2"        value={customer.address2} />
-          <Row label="Area"             value={customer.area} />
-          <Row label="City"             value={customer.city} />
-          <Row label="District"         value={customer.district} />
-          <Row label="State"            value={customer.state} />
-          <Row label="Pincode"          value={customer.pincode} />
-          <Row label="Blood Group"      value={customer.bloodGroup} />
-          <Row label="Religion"         value={customer.religion} />
+
+          {editing ? (
+            <div className="space-y-0.5">
+              <EField label="Category"         field="category" />
+              <EField label="First Name"       field="firstName" />
+              <EField label="Middle Name"      field="middleName" />
+              <EField label="Last Name"        field="lastName" />
+              <EField label="Primary Mobile"   field="mobile1" type="tel" maxLen={10} />
+              <EField label="Secondary Mobile" field="mobile2" type="tel" maxLen={10} />
+              <EField label="Address 1"        field="address1" />
+              <EField label="Address 2"        field="address2" />
+              <EField label="Area"             field="area" />
+              <EField label="City"             field="city" />
+              <EField label="District"         field="district" />
+              <EField label="State"            field="state" />
+              <EField label="Pincode"          field="pincode" maxLen={6} />
+              <EField label="Blood Group"      field="bloodGroup" type="select-blood" />
+              <EField label="Religion"         field="religion" />
+              {saveError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{saveError}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <Row label="Primary Mobile"   value={customer.mobile1} />
+              <Row label="Secondary Mobile" value={customer.mobile2} />
+              <Row label="Address 1"        value={customer.address1} />
+              <Row label="Address 2"        value={customer.address2} />
+              <Row label="Area"             value={customer.area} />
+              <Row label="City"             value={customer.city} />
+              <Row label="District"         value={customer.district} />
+              <Row label="State"            value={customer.state} />
+              <Row label="Pincode"          value={customer.pincode} />
+              <Row label="Blood Group"      value={customer.bloodGroup} />
+              <Row label="Religion"         value={customer.religion} />
+            </>
+          )}
         </div>
+
+        {/* Footer */}
         <div className="px-6 py-3 bg-slate-50 flex justify-between items-center border-t border-slate-100">
           <p className="text-xs text-slate-400">
             Added {new Date(customer.createdAt).toLocaleDateString("en-IN")}
           </p>
           <div className="flex gap-2">
-            {isAdmin && (
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
+            {editing ? (
+              <>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-60 flex items-center gap-1.5"
+                >
+                  {saving && <Spinner size={13} />}
+                  {saving ? "Saving…" : "Save Changes"}
+                </button>
+              </>
+            ) : (
+              <>
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 transition"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition"
+                    >
+                      {deleting ? "Deleting…" : "Delete"}
+                    </button>
+                  </>
+                )}
+                <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                  Close
+                </button>
+              </>
             )}
-            <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
-              Close
-            </button>
           </div>
         </div>
       </div>
@@ -147,14 +297,14 @@ function ExportBar() {
         Export Customers
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-        <input placeholder="Category filter" value={category} onChange={e => setCategory(e.target.value)} className={inputCls} />
+        <input placeholder="Category filter" value={category} onChange={e => setCategory(cap(e.target.value))} className={inputCls} />
         <select value={bloodGroup} onChange={e => setBloodGroup(e.target.value)} className={inputCls}>
           <option value="">All Blood Groups</option>
           {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
         </select>
-        <input placeholder="Religion filter" value={religion} onChange={e => setReligion(e.target.value)} className={inputCls} />
-        <input placeholder="City filter"     value={city}     onChange={e => setCity(e.target.value)}     className={inputCls} />
-        <input placeholder="Name filter"     value={name}     onChange={e => setName(e.target.value)}     className={inputCls} />
+        <input placeholder="Religion filter" value={religion} onChange={e => setReligion(cap(e.target.value))} className={inputCls} />
+        <input placeholder="City filter"     value={city}     onChange={e => setCity(cap(e.target.value))}     className={inputCls} />
+        <input placeholder="Name filter"     value={name}     onChange={e => setName(cap(e.target.value))}     className={inputCls} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
@@ -180,7 +330,7 @@ function ExportBar() {
 }
 
 // ── Customer Table ───────────────────────────────────────────────────────────
-function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange, onDeleted }) {
+function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }) {
   if (customers.length === 0) {
     return <p className="text-center text-slate-400 text-sm py-10">No customers found.</p>;
   }
@@ -204,21 +354,21 @@ function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange, 
             {customers.map((c, i) => (
               <tr key={c._id} className="border-t border-slate-100 hover:bg-sky-50/40 transition">
                 <td className="px-4 py-2.5 text-slate-400">{(page - 1) * 20 + i + 1}</td>
-                <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap">
+                <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap uppercase">
                   {c.firstName} {c.middleName} {c.lastName}
                   {c.category && (
-                    <span className="ml-2 px-1.5 py-0.5 bg-violet-50 text-violet-500 rounded text-xs border border-violet-200">{c.category}</span>
+                    <span className="ml-2 px-1.5 py-0.5 bg-violet-50 text-violet-500 rounded text-xs border border-violet-200 uppercase">{c.category}</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-slate-600">{c.mobile1}</td>
                 <td className="px-4 py-2.5 text-slate-400">{c.mobile2 || "—"}</td>
-                <td className="px-4 py-2.5 text-slate-600">{c.city || "—"}</td>
+                <td className="px-4 py-2.5 text-slate-600 uppercase">{c.city || "—"}</td>
                 <td className="px-4 py-2.5">
                   {c.bloodGroup
                     ? <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold border border-red-200">{c.bloodGroup}</span>
                     : "—"}
                 </td>
-                <td className="px-4 py-2.5 text-slate-600">{c.religion || "—"}</td>
+                <td className="px-4 py-2.5 text-slate-600 uppercase">{c.religion || "—"}</td>
                 <td className="px-4 py-2.5">
                   <button onClick={() => onView(c)}
                     className="px-3 py-1 rounded-lg bg-sky-50 text-sky-600 text-xs font-semibold hover:bg-sky-100 border border-sky-200 transition">
@@ -251,16 +401,13 @@ function SearchPanel({ isAdmin }) {
   const [page,      setPage]      = useState(1);
   const [loading,   setLoading]   = useState(false);
   const [popup,     setPopup]     = useState(null);
-  const [searched,  setSearched]  = useState(false);
 
   const setF = (k, v) => setFilters(f => ({ ...f, [k]: v }));
 
-  // ✅ Load ALL customers on mount
   useEffect(() => { doSearch(1, {}); }, []);
 
   async function doSearch(p = 1, overrideFilters) {
     setLoading(true);
-    setSearched(true);
     const f = overrideFilters ?? filters;
     const qs = new URLSearchParams({ ...f, page: p, limit: 20 });
     const res  = await fetch(`/api/customers?${qs}`);
@@ -279,9 +426,14 @@ function SearchPanel({ isAdmin }) {
     doSearch(1, empty);
   }
 
+  // Update the popup customer in-place after an edit
+  function handleUpdated(updated) {
+    setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
+    setPopup(updated);
+  }
+
   return (
     <div className="space-y-4">
-      {/* Filter card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
@@ -289,11 +441,11 @@ function SearchPanel({ isAdmin }) {
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
           <input placeholder="Name / Mobile / City…" value={filters.search}
-            onChange={e => setF("search", e.target.value)}
+            onChange={e => setF("search", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={`${inputCls} col-span-2 sm:col-span-1`} />
           <input placeholder="Name" value={filters.name}
-            onChange={e => setF("name", e.target.value)}
+            onChange={e => setF("name", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
           <select value={filters.bloodGroup} onChange={e => setF("bloodGroup", e.target.value)} className={inputCls}>
@@ -301,11 +453,11 @@ function SearchPanel({ isAdmin }) {
             {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
           </select>
           <input placeholder="Religion" value={filters.religion}
-            onChange={e => setF("religion", e.target.value)}
+            onChange={e => setF("religion", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
           <input placeholder="City" value={filters.city}
-            onChange={e => setF("city", e.target.value)}
+            onChange={e => setF("city", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
         </div>
@@ -321,7 +473,6 @@ function SearchPanel({ isAdmin }) {
         </div>
       </div>
 
-      {/* Results */}
       {loading ? (
         <div className="flex justify-center py-16"><Spinner size={32} /></div>
       ) : (
@@ -332,7 +483,6 @@ function SearchPanel({ isAdmin }) {
           isAdmin={isAdmin}
           onView={setPopup}
           onPageChange={p => doSearch(p)}
-          onDeleted={() => doSearch(page)}
         />
       )}
 
@@ -342,6 +492,7 @@ function SearchPanel({ isAdmin }) {
           isAdmin={isAdmin}
           onClose={() => setPopup(null)}
           onDeleted={() => doSearch(page)}
+          onUpdated={handleUpdated}
         />
       )}
     </div>
@@ -351,8 +502,7 @@ function SearchPanel({ isAdmin }) {
 // ── Add Form ─────────────────────────────────────────────────────────────────
 function AddForm({ isAdmin, userEmail }) {
   const [form,       setForm]       = useState(EMPTY_FORM);
-  const [checking,   setChecking]   = useState({ mob1: false, mob2: false });
-  const [mob1Status, setMob1Status] = useState("idle"); // idle | checking | new | exists
+  const [mob1Status, setMob1Status] = useState("idle");
   const [mob2Status, setMob2Status] = useState("idle");
   const [matchedCustomer, setMatchedCustomer] = useState(null);
   const [showPopup,  setShowPopup]  = useState(false);
@@ -363,18 +513,16 @@ function AddForm({ isAdmin, userEmail }) {
   const debounce1 = useRef(null);
   const debounce2 = useRef(null);
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set    = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCap = (k, v) => setForm(f => ({ ...f, [k]: cap(v) }));
   const showForm = mob1Status === "new";
 
   const checkMobile = useCallback((mobile, field) => {
-    const ref    = field === "mobile1" ? debounce1 : debounce2;
+    const ref       = field === "mobile1" ? debounce1 : debounce2;
     const setStatus = field === "mobile1" ? setMob1Status : setMob2Status;
 
     clearTimeout(ref.current);
-    if (!mobile || mobile.length !== 10) {
-      setStatus("idle");
-      return;
-    }
+    if (!mobile || mobile.length !== 10) { setStatus("idle"); return; }
 
     setStatus("checking");
     ref.current = setTimeout(async () => {
@@ -383,26 +531,18 @@ function AddForm({ isAdmin, userEmail }) {
         const data = await res.json();
         if (data.found) {
           setStatus("exists");
-          if (field === "mobile1") {
-            setMatchedCustomer(data.customer);
-            setShowPopup(true);
-          }
+          if (field === "mobile1") { setMatchedCustomer(data.customer); setShowPopup(true); }
         } else {
           setStatus("new");
         }
-      } catch {
-        setStatus("idle");
-      }
+      } catch { setStatus("idle"); }
     }, 600);
   }, []);
 
   function handleMobileChange(field, value) {
     const v = value.replace(/\D/g, "").slice(0, 10);
     set(field, v);
-    if (field === "mobile1") {
-      setMob1Status("idle");
-      setError("");
-    }
+    if (field === "mobile1") { setMob1Status("idle"); setError(""); }
     checkMobile(v, field);
   }
 
@@ -433,7 +573,6 @@ function AddForm({ isAdmin, userEmail }) {
     }
   }
 
-  // Mob1 status indicator
   const mob1Hint = {
     idle:     <p className="text-xs text-slate-400 mt-1">Enter 10-digit number — we'll check the database</p>,
     checking: <p className="text-xs text-sky-500 mt-1 flex items-center gap-1"><Spinner size={11} /> Checking database…</p>,
@@ -456,6 +595,7 @@ function AddForm({ isAdmin, userEmail }) {
           isAdmin={isAdmin}
           onClose={() => { setShowPopup(false); setMatchedCustomer(null); }}
           onDeleted={() => {}}
+          onUpdated={(updated) => setMatchedCustomer(updated)}
         />
       )}
 
@@ -475,15 +615,9 @@ function AddForm({ isAdmin, userEmail }) {
                   onChange={e => handleMobileChange("mobile1", e.target.value)}
                   className={`${inputCls} pr-9 ${mob1Status === "exists" ? "border-amber-300 ring-amber-200" : mob1Status === "new" ? "border-emerald-300" : ""}`}
                 />
-                {mob1Status === "checking" && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>
-                )}
-                {mob1Status === "new" && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-base">✓</span>
-                )}
-                {mob1Status === "exists" && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 text-base">!</span>
-                )}
+                {mob1Status === "checking" && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>}
+                {mob1Status === "new"      && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-base">✓</span>}
+                {mob1Status === "exists"   && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 text-base">!</span>}
               </div>
               {mob1Hint}
             </Field>
@@ -496,16 +630,13 @@ function AddForm({ isAdmin, userEmail }) {
                   onChange={e => handleMobileChange("mobile2", e.target.value)}
                   className={`${inputCls} pr-9 ${mob2Status === "exists" ? "border-amber-300" : mob2Status === "new" ? "border-emerald-300" : ""}`}
                 />
-                {mob2Status === "checking" && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>
-                )}
+                {mob2Status === "checking" && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>}
               </div>
               {mob2Hint}
             </Field>
           </div>
         </div>
 
-        {/* Rest of form — only shown when mob1 is confirmed new */}
         {showForm && (
           <>
             {/* Category */}
@@ -515,8 +646,8 @@ function AddForm({ isAdmin, userEmail }) {
                 Category
               </h3>
               <Field label="Category">
-                <input type="text" placeholder="e.g. VIP, Regular, Corporate…"
-                  value={form.category} onChange={e => set("category", e.target.value)} className={inputCls} />
+                <input type="text" placeholder="e.g. VIP, REGULAR, CORPORATE…"
+                  value={form.category} onChange={e => setCap("category", e.target.value)} className={inputCls} />
               </Field>
             </div>
 
@@ -528,16 +659,16 @@ function AddForm({ isAdmin, userEmail }) {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="First Name" required>
-                  <input type="text" placeholder="First" value={form.firstName}
-                    onChange={e => set("firstName", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="FIRST" value={form.firstName}
+                    onChange={e => setCap("firstName", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Middle Name">
-                  <input type="text" placeholder="Middle" value={form.middleName}
-                    onChange={e => set("middleName", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="MIDDLE" value={form.middleName}
+                    onChange={e => setCap("middleName", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Last Name" required>
-                  <input type="text" placeholder="Last" value={form.lastName}
-                    onChange={e => set("lastName", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="LAST" value={form.lastName}
+                    onChange={e => setCap("lastName", e.target.value)} className={inputCls} />
                 </Field>
               </div>
             </div>
@@ -550,31 +681,31 @@ function AddForm({ isAdmin, userEmail }) {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Address Line 1">
-                  <input type="text" placeholder="House / Flat no, Street"
-                    value={form.address1} onChange={e => set("address1", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="HOUSE / FLAT NO, STREET"
+                    value={form.address1} onChange={e => setCap("address1", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Address Line 2">
-                  <input type="text" placeholder="Landmark, Colony"
-                    value={form.address2} onChange={e => set("address2", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="LANDMARK, COLONY"
+                    value={form.address2} onChange={e => setCap("address2", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Area">
-                  <input type="text" placeholder="Area / Locality"
-                    value={form.area} onChange={e => set("area", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="AREA / LOCALITY"
+                    value={form.area} onChange={e => setCap("area", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="City">
-                  <input type="text" placeholder="City"
-                    value={form.city} onChange={e => set("city", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="CITY"
+                    value={form.city} onChange={e => setCap("city", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="District">
-                  <input type="text" placeholder="District"
-                    value={form.district} onChange={e => set("district", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="DISTRICT"
+                    value={form.district} onChange={e => setCap("district", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="State">
-                  <input type="text" placeholder="State"
-                    value={form.state} onChange={e => set("state", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="STATE"
+                    value={form.state} onChange={e => setCap("state", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Pincode">
-                  <input type="text" inputMode="numeric" maxLength={6} placeholder="6-digit pincode"
+                  <input type="text" inputMode="numeric" maxLength={6} placeholder="6-DIGIT PINCODE"
                     value={form.pincode}
                     onChange={e => set("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
                     className={inputCls} />
@@ -595,8 +726,8 @@ function AddForm({ isAdmin, userEmail }) {
                   </select>
                 </Field>
                 <Field label="Religion">
-                  <input type="text" placeholder="e.g. Hindu, Islam, Christian…"
-                    value={form.religion} onChange={e => set("religion", e.target.value)} className={inputCls} />
+                  <input type="text" placeholder="E.G. HINDU, ISLAM, CHRISTIAN…"
+                    value={form.religion} onChange={e => setCap("religion", e.target.value)} className={inputCls} />
                 </Field>
               </div>
             </div>
@@ -622,13 +753,13 @@ function AddForm({ isAdmin, userEmail }) {
   );
 }
 
-// ── Tabs config ──────────────────────────────────────────────────────────────
+// ── Tabs config ───────────────────────────────────────────────────────────────
 const TABS = {
   admin:    [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }, { key: "export", label: "Export" }],
   accounts: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }],
 };
 
-// ── Main Page ────────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AddCustomerPage() {
   const { data: session, status } = useSession();
   const [tab, setTab] = useState("add");
@@ -636,7 +767,7 @@ export default function AddCustomerPage() {
   const role    = session?.user?.role;
   const isAdmin = role === "admin";
 
-  if (status === "loading" || !role) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -647,16 +778,9 @@ export default function AddCustomerPage() {
     );
   }
 
-  if (role !== "admin" && role !== "accounts") {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl p-10 shadow border border-red-100 text-center max-w-sm">
-          <p className="text-4xl mb-3">🚫</p>
-          <h2 className="font-bold text-slate-800 mb-1">Access Denied</h2>
-          <p className="text-slate-500 text-sm">You don't have permission to view this page.</p>
-        </div>
-      </div>
-    );
+  // 404 for unauthenticated users or unknown roles
+  if (!session || (role !== "admin" && role !== "accounts")) {
+    return <NotFoundPage />;
   }
 
   const tabs = TABS[role] || TABS.accounts;
