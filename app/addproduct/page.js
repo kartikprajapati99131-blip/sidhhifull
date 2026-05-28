@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CldUploadButton } from "next-cloudinary";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import { useSession } from "next-auth/react";
@@ -46,6 +46,7 @@ const TAG_COLORS = {
 const EMPTY_FORM = {
   name: "", price: "", priceUnit: "", type: "",
   description: "", images: [], variants: [], tags: [],
+  brand: "", subCategory: "",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -57,8 +58,27 @@ export default function AddProduct() {
   const [form, setForm]             = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Brand state ──────────────────────────────────────────────────────────────
+  const [brands, setBrands]         = useState([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
+
   const typeConfig    = TYPE_VARIANT_CONFIG[form.type] || null;
   const isVariantMode = typeConfig?.mode === "variants";
+
+  // ── Load brands when type changes ────────────────────────────────────────────
+  useEffect(() => {
+    if (!form.type) { setBrands([]); return; }
+    setBrandsLoading(true);
+    fetch(`/api/brand/list?type=${form.type}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.success) setBrands(data.brands); })
+      .catch(() => {})
+      .finally(() => setBrandsLoading(false));
+  }, [form.type]);
+
+  // ── Sub-categories of selected brand ─────────────────────────────────────────
+  const selectedBrand   = brands.find((b) => b.name === form.brand) || null;
+  const subCatOptions   = selectedBrand?.subCategories || [];
 
   // ─── Type change ────────────────────────────────────────────────────────────
   const handleTypeChange = (e) => {
@@ -68,6 +88,7 @@ export default function AddProduct() {
       ...prev, type,
       variants: [], price: "",
       priceUnit: config?.unit || "",
+      brand: "", subCategory: "",
     }));
   };
 
@@ -102,16 +123,9 @@ export default function AddProduct() {
     setForm((prev) => ({ ...prev, variants: prev.variants.filter((_, idx) => idx !== i) }));
 
   // ─── Images ─────────────────────────────────────────────────────────────────
-  // ✅ FIX: Use onSuccess (not onUpload) — onSuccess fires ONLY on a successful
-  //         upload and always contains the upload info with secure_url.
-  //         onUpload fires on every widget event (open, queued, etc.) and its
-  //         shape varies; it was swallowing the image data silently.
   const handleUploadSuccess = (result) => {
-    // next-cloudinary onSuccess: result = { event: "success", info: { secure_url, public_id, … } }
-    // Defensive: also handle the case where result IS the info object directly.
     const info = result?.info ?? result;
     if (!info || typeof info === "string") return;
-
     const url       = info.secure_url;
     const public_id = info.public_id || "";
     if (!url) return;
@@ -121,10 +135,7 @@ export default function AddProduct() {
         toast.error(`Maximum ${MAX_IMAGES} images allowed.`);
         return prev;
       }
-      return {
-        ...prev,
-        images: [...prev.images, { url, public_id }],
-      };
+      return { ...prev, images: [...prev.images, { url, public_id }] };
     });
   };
 
@@ -181,11 +192,11 @@ export default function AddProduct() {
     }
   };
 
-  // ─── Auth guard ──────────────────────────────────────────────────────────────
+  // ─── Auth guard ───────────────────────────────────────────────────────────────
   if (status === "loading") return <p className="p-10 text-sm text-gray-500">Loading…</p>;
   if (!session || !isAdmin)  return notFound();
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
       <ToastContainer position="top-center" autoClose={4000} theme="light" transition={Bounce} />
@@ -228,6 +239,55 @@ export default function AddProduct() {
             </select>
           </div>
 
+          {/* ── Brand (shown after type is selected) ── */}
+          {form.type && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Brand
+                <span className="font-normal text-gray-400 ml-1">(optional)</span>
+              </label>
+              {brandsLoading ? (
+                <p className="text-xs text-gray-400 py-2">Loading brands…</p>
+              ) : brands.length === 0 ? (
+                <p className="text-xs text-gray-400 py-2">
+                  No brands added for {TYPE_LABELS[form.type] || form.type} yet.{" "}
+                  <a href="/admin/brands" className="text-blue-500 hover:underline">Add brands →</a>
+                </p>
+              ) : (
+                <select
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value, subCategory: "" })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">No brand / General</option>
+                  {brands.map((b) => (
+                    <option key={b._id} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* ── Sub-category (shown when brand has sub-categories) ── */}
+          {subCatOptions.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Sub-category
+                <span className="font-normal text-gray-400 ml-1">(optional)</span>
+              </label>
+              <select
+                value={form.subCategory}
+                onChange={(e) => setForm({ ...form, subCategory: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">All / General</option>
+                {subCatOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* ── Description ── */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
@@ -264,11 +324,8 @@ export default function AddProduct() {
           {/* ── Variants ── */}
           {typeConfig && isVariantMode && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-2">
-                Sizes / Options *
-              </label>
+              <label className="block text-xs font-medium text-gray-500 mb-2">Sizes / Options *</label>
 
-              {/* Preset chips */}
               {typeConfig.presets.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {typeConfig.presets.map((preset) => {
@@ -290,7 +347,6 @@ export default function AddProduct() {
                 </div>
               )}
 
-              {/* Column headers */}
               {form.variants.length > 0 && (
                 <div className="grid grid-cols-12 gap-2 px-1 mb-1">
                   {["Label", "Price (₹)", "Unit", ""].map((h, i) => (
@@ -299,7 +355,6 @@ export default function AddProduct() {
                 </div>
               )}
 
-              {/* Variant rows */}
               <div className="flex flex-col gap-2">
                 {form.variants.map((v, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-lg p-2 border border-gray-100">
@@ -312,26 +367,19 @@ export default function AddProduct() {
                     <input
                       value={v.price}
                       onChange={(e) => updateVariant(i, "price", e.target.value)}
-                      placeholder="0"
-                      type="number" min="0"
+                      placeholder="0" type="number" min="0"
                       className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
-                    <span className="col-span-3 text-xs text-gray-400 px-1">
-                      / {v.unit || typeConfig.unit}
-                    </span>
+                    <span className="col-span-3 text-xs text-gray-400 px-1">/ {v.unit || typeConfig.unit}</span>
                     <button
                       type="button" onClick={() => removeVariant(i)}
                       className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-600 transition text-base"
-                      aria-label="Remove variant"
                     >✕</button>
                   </div>
                 ))}
               </div>
 
-              <button
-                type="button" onClick={() => addVariant()}
-                className="mt-2 text-xs text-blue-600 hover:underline"
-              >
+              <button type="button" onClick={() => addVariant()} className="mt-2 text-xs text-blue-600 hover:underline">
                 + Add custom option
               </button>
             </div>
@@ -358,61 +406,31 @@ export default function AddProduct() {
             </div>
           </div>
 
-          {/* ── Image gallery upload ── */}
+          {/* ── Images ── */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <div>
-                <label className="block text-xs font-medium text-gray-500">
-                  Product Images *
-                </label>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Up to {MAX_IMAGES} images. First image is the cover.
-                </p>
+                <label className="block text-xs font-medium text-gray-500">Product Images *</label>
+                <p className="text-xs text-gray-400 mt-0.5">Up to {MAX_IMAGES} images. First image is the cover.</p>
               </div>
-              <span className="text-xs text-gray-400">
-                {form.images.length} / {MAX_IMAGES}
-              </span>
+              <span className="text-xs text-gray-400">{form.images.length} / {MAX_IMAGES}</span>
             </div>
 
-            {/* Uploaded thumbnails */}
             {form.images.length > 0 && (
               <div className="grid grid-cols-3 gap-3 mb-3">
                 {form.images.map((img, i) => (
-                  <div
-                    key={img.public_id || i}
-                    className={`relative rounded-xl border-2 overflow-hidden group aspect-square bg-gray-50 ${
-                      i === 0 ? "border-blue-400" : "border-gray-200"
-                    }`}
-                  >
-                    <img
-                      src={img.url}
-                      alt={`Product image ${i + 1}`}
-                      className="w-full h-full object-contain p-1"
-                    />
-
-                    {/* Cover badge */}
+                  <div key={img.public_id || i} className={`relative rounded-xl border-2 overflow-hidden group aspect-square bg-gray-50 ${i === 0 ? "border-blue-400" : "border-gray-200"}`}>
+                    <img src={img.url} alt={`Product image ${i + 1}`} className="w-full h-full object-contain p-1" />
                     {i === 0 && (
-                      <span className="absolute top-1.5 left-1.5 bg-blue-500 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">
-                        Cover
-                      </span>
+                      <span className="absolute top-1.5 left-1.5 bg-blue-500 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">Cover</span>
                     )}
-
-                    {/* Hover actions */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
                       {i !== 0 && (
-                        <button
-                          type="button"
-                          onClick={() => makeCover(i)}
-                          className="bg-white text-blue-600 text-[10px] font-medium px-2 py-1 rounded-full hover:bg-blue-50 transition"
-                        >
+                        <button type="button" onClick={() => makeCover(i)} className="bg-white text-blue-600 text-[10px] font-medium px-2 py-1 rounded-full hover:bg-blue-50 transition">
                           Make Cover
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(i)}
-                        className="bg-white text-red-500 text-[10px] font-medium px-2 py-1 rounded-full hover:bg-red-50 transition"
-                      >
+                      <button type="button" onClick={() => removeImage(i)} className="bg-white text-red-500 text-[10px] font-medium px-2 py-1 rounded-full hover:bg-red-50 transition">
                         Remove
                       </button>
                     </div>
@@ -421,14 +439,8 @@ export default function AddProduct() {
               </div>
             )}
 
-            {/* Upload trigger — hidden when limit reached */}
             {form.images.length < MAX_IMAGES && (
-              // ✅ FIX: onSuccess instead of onUpload — fires only on successful upload
-              <CldUploadButton
-                uploadPreset="bxbblrlt"
-                onSuccess={handleUploadSuccess}
-                className="w-full"
-              >
+              <CldUploadButton uploadPreset="bxbblrlt" onSuccess={handleUploadSuccess} className="w-full">
                 <div className="w-full h-28 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group">
                   <div className="text-2xl text-gray-300 group-hover:text-blue-400 transition mb-1">+</div>
                   <p className="text-xs font-medium text-gray-400 group-hover:text-blue-500 transition">
@@ -442,8 +454,7 @@ export default function AddProduct() {
 
           {/* ── Submit ── */}
           <button
-            type="submit"
-            disabled={submitting}
+            type="submit" disabled={submitting}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-lg text-sm font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? "Saving…" : "Save Product"}

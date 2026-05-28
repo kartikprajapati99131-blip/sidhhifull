@@ -158,5 +158,5 @@ export default async function ShopPage({ searchParams }) {
         <ShopClient initialProducts={products} selectedType={type} />
       </div>
     </>
-  );
+  );  
 }

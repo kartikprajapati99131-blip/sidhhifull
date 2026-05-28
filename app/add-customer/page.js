@@ -3,7 +3,9 @@
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef, useCallback } from "react";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
 const BLOOD_GROUPS = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
 const EMPTY_FORM = {
   mobile1: "", mobile2: "", category: "",
   firstName: "", middleName: "", lastName: "",
@@ -12,19 +14,50 @@ const EMPTY_FORM = {
   bloodGroup: "", religion: "",
 };
 
-// ── Suggested words per field ─────────────────────────────────────────────────
+const EMPTY_FILTERS = {
+  search: "", name: "", category: "", bloodGroup: "", religion: "", city: "",
+};
+
 const SUGGESTIONS = {
-  religion:  ["HINDU", "ISLAM", "CHRISTIAN", "SIKH", "JAIN", "BUDDHIST", "PARSI", "OTHER"],
-  city:      ["AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "PALANPUR", "GANDHINAGAR", "ANAND", "MEHSANA"],
-  district:  ["BANASKANTHA", "AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "GANDHINAGAR", "ANAND", "MEHSANA"],
-  state:     ["GUJARAT", "MAHARASHTRA", "RAJASTHAN", "MADHYA PRADESH", "DELHI", "UTTAR PRADESH"],
-  area:      ["MAIN ROAD", "NEAR BUS STAND", "NEAR RAILWAY STATION", "BEHIND HOSPITAL", "NEAR TEMPLE"],
+  religion: ["HINDU", "ISLAM", "CHRISTIAN", "SIKH", "JAIN", "BUDDHIST", "PARSI", "OTHER"],
+  city:     ["AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "PALANPUR", "GANDHINAGAR", "ANAND", "MEHSANA"],
+  district: ["BANASKANTHA", "AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "GANDHINAGAR", "ANAND", "MEHSANA"],
+  state:    ["GUJARAT", "MAHARASHTRA", "RAJASTHAN", "MADHYA PRADESH", "DELHI", "UTTAR PRADESH"],
+  area:     ["MAIN ROAD", "NEAR BUS STAND", "NEAR RAILWAY STATION", "BEHIND HOSPITAL", "NEAR TEMPLE"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const cap = (v) => (typeof v === "string" ? v.toUpperCase() : v);
 
-// ── Shared UI ─────────────────────────────────────────────────────────────────
+function filtersToQS(f, extra = {}) {
+  const p = new URLSearchParams();
+  Object.entries({ ...f, ...extra }).forEach(([k, v]) => {
+    if (v !== "" && v !== null && v !== undefined) p.set(k, String(v));
+  });
+  return p.toString();
+}
+
+// ── Shared styles ─────────────────────────────────────────────────────────────
+const inputCls =
+  "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white " +
+  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent " +
+  "placeholder:text-slate-300 transition uppercase";
+
+const popupInputCls =
+  "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
+  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
+
+// ── Spinner ───────────────────────────────────────────────────────────────────
+function Spinner({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className="animate-spin text-sky-500" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ── Field wrapper ─────────────────────────────────────────────────────────────
 function Field({ label, required, children, className = "" }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
@@ -36,37 +69,18 @@ function Field({ label, required, children, className = "" }) {
   );
 }
 
-const inputCls =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white " +
-  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent " +
-  "placeholder:text-slate-300 transition uppercase";
-
-function Spinner({ size = 16 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className="animate-spin text-sky-500" fill="none">
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".25" />
-      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-// ── Suggestion Chips ──────────────────────────────────────────────────────────
+// ── Suggestion chips ──────────────────────────────────────────────────────────
 function SuggestionChips({ field, value, onSelect }) {
   const list = SUGGESTIONS[field];
   if (!list) return null;
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {list.map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => onSelect(s)}
+        <button key={s} type="button" onClick={() => onSelect(s)}
           className={`px-2 py-0.5 rounded-full text-xs font-medium border transition
             ${value === s
               ? "bg-sky-500 text-white border-sky-500"
-              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-300"
-            }`}
-        >
+              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-300"}`}>
           {s}
         </button>
       ))}
@@ -74,7 +88,7 @@ function SuggestionChips({ field, value, onSelect }) {
   );
 }
 
-// ── Category Select + Add (admin) ─────────────────────────────────────────────
+// ── Category select ───────────────────────────────────────────────────────────
 function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded }) {
   const [adding,   setAdding]   = useState(false);
   const [newCat,   setNewCat]   = useState("");
@@ -84,8 +98,7 @@ function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded 
   async function handleAdd() {
     const trimmed = newCat.trim().toUpperCase();
     if (!trimmed) { setAddError("Enter a category name."); return; }
-    setSaving(true);
-    setAddError("");
+    setSaving(true); setAddError("");
     const res  = await fetch("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -96,8 +109,7 @@ function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded 
     if (res.ok) {
       onCategoryAdded(data.categories, trimmed);
       onChange(trimmed);
-      setNewCat("");
-      setAdding(false);
+      setNewCat(""); setAdding(false);
     } else {
       setAddError(data.error || "Failed to add.");
     }
@@ -106,50 +118,31 @@ function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded 
   return (
     <div className="space-y-1.5">
       <div className="flex gap-2">
-        <select
-          value={value || ""}
-          onChange={e => onChange(e.target.value)}
-          className={`${inputCls} flex-1`}
-        >
+        <select value={value || ""} onChange={e => onChange(e.target.value)} className={`${inputCls} flex-1`}>
           <option value="">— Select Category —</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {isAdmin && (
-          <button
-            type="button"
+          <button type="button"
             onClick={() => { setAdding(a => !a); setAddError(""); setNewCat(""); }}
             className={`px-3 py-2 rounded-lg text-sm font-semibold border transition whitespace-nowrap
-              ${adding
-                ? "bg-slate-100 text-slate-500 border-slate-200"
-                : "bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-100"}`}
-          >
+              ${adding ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-100"}`}>
             {adding ? "✕ Cancel" : "+ New"}
           </button>
         )}
       </div>
-
       {adding && isAdmin && (
         <div className="flex gap-2 items-start">
           <div className="flex-1">
-            <input
-              type="text"
-              placeholder="NEW CATEGORY NAME"
-              value={newCat}
+            <input type="text" placeholder="NEW CATEGORY NAME" value={newCat}
               onChange={e => { setNewCat(e.target.value.toUpperCase()); setAddError(""); }}
               onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAdd())}
-              className={inputCls}
-              autoFocus
-            />
+              className={inputCls} autoFocus />
             {addError && <p className="text-xs text-red-500 mt-1">{addError}</p>}
           </div>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-500 text-white hover:bg-violet-600 transition disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap"
-          >
-            {saving && <Spinner size={12} />}
-            {saving ? "Adding…" : "Add"}
+          <button type="button" onClick={handleAdd} disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-500 text-white hover:bg-violet-600 transition disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap">
+            {saving && <Spinner size={12} />}{saving ? "Adding…" : "Add"}
           </button>
         </div>
       )}
@@ -157,7 +150,21 @@ function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded 
   );
 }
 
-// ── Popup Read-only Row (top-level — never recreated) ────────────────────────
+// ── 404 ───────────────────────────────────────────────────────────────────────
+function NotFoundPage() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-center max-w-sm px-6">
+        <p className="text-8xl font-black text-slate-200 select-none leading-none">404</p>
+        <p className="text-5xl mt-2 mb-4">🚫</p>
+        <h2 className="font-bold text-slate-800 text-xl mb-2">Page Not Found</h2>
+        <p className="text-slate-500 text-sm">You don't have permission to view this page.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Popup read-only row ───────────────────────────────────────────────────────
 function PopupRow({ label, value }) {
   if (!value) return null;
   return (
@@ -168,79 +175,41 @@ function PopupRow({ label, value }) {
   );
 }
 
-// ── Popup Edit Field (top-level — never recreated on parent render) ───────────
-const popupInputCls =
-  "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
-  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
-
+// ── Popup edit field ──────────────────────────────────────────────────────────
 function EField({ label, field, type = "text", maxLen, draft, setD, setDCap, isAdmin, categories, onCategoryAdded }) {
   return (
     <div className="py-1.5 border-b border-slate-100 last:border-0">
       <div className="flex gap-2 items-center">
         <span className="text-xs text-slate-400 w-28 shrink-0">{label}</span>
         {type === "select-blood" ? (
-          <select
-            value={draft[field] || ""}
-            onChange={e => setD(field, e.target.value)}
-            className={popupInputCls}
-          >
+          <select value={draft[field] || ""} onChange={e => setD(field, e.target.value)} className={popupInputCls}>
             {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b || "— Select —"}</option>)}
           </select>
         ) : type === "select-category" ? (
           <div className="flex-1">
-            <CategorySelect
-              value={draft.category || ""}
-              onChange={v => setD("category", v)}
-              isAdmin={isAdmin}
-              categories={categories}
-              onCategoryAdded={onCategoryAdded}
-            />
+            <CategorySelect value={draft.category || ""} onChange={v => setD("category", v)}
+              isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
           </div>
         ) : (
-          <input
-            type={type}
-            inputMode={type === "tel" ? "numeric" : undefined}
-            maxLength={maxLen}
-            value={draft[field] || ""}
-            onChange={e => setDCap(field, e.target.value)}
-            className={popupInputCls}
-          />
+          <input type={type} inputMode={type === "tel" ? "numeric" : undefined}
+            maxLength={maxLen} value={draft[field] || ""}
+            onChange={e => setDCap(field, e.target.value)} className={popupInputCls} />
         )}
       </div>
       {type !== "select-blood" && type !== "select-category" && SUGGESTIONS[field] && (
         <div className="ml-28 pl-2 mt-1">
-          <SuggestionChips
-            field={field}
-            value={draft[field] || ""}
-            onSelect={v => setD(field, v)}
-          />
+          <SuggestionChips field={field} value={draft[field] || ""} onSelect={v => setD(field, v)} />
         </div>
       )}
     </div>
   );
 }
 
-// ── 404 Page ──────────────────────────────────────────────────────────────────
-function NotFoundPage() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="text-center max-w-sm px-6">
-        <p className="text-8xl font-black text-slate-200 select-none leading-none">404</p>
-        <p className="text-5xl mt-2 mb-4">🚫</p>
-        <h2 className="font-bold text-slate-800 text-xl mb-2">Page Not Found</h2>
-        <p className="text-slate-500 text-sm">
-          You don't have permission to view this page, or this page doesn't exist.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ── Customer Detail / Edit Popup ──────────────────────────────────────────────
-function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdated, isAdmin, categories, onCategoryAdded }) {
-  const [customer, setCustomer] = useState(initialCustomer);
+// ── Customer popup ────────────────────────────────────────────────────────────
+function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin, categories, onCategoryAdded }) {
+  const [customer, setCustomer] = useState(init);
   const [editing,  setEditing]  = useState(false);
-  const [draft,    setDraft]    = useState({ ...initialCustomer });
+  const [draft,    setDraft]    = useState({ ...init });
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -261,7 +230,6 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
     setSaveError("");
     if (!draft.firstName?.trim()) { setSaveError("First name is required."); return; }
     if (!draft.lastName?.trim())  { setSaveError("Last name is required."); return; }
-
     setSaving(true);
     const res  = await fetch(`/api/customers/${customer._id}`, {
       method: "PUT",
@@ -270,32 +238,40 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
     });
     const data = await res.json();
     setSaving(false);
-
     if (res.ok) {
       const updated = data.customer || { ...customer, ...draft };
-      setCustomer(updated);
-      setDraft({ ...updated });
-      setEditing(false);
+      setCustomer(updated); setDraft({ ...updated }); setEditing(false);
       if (onUpdated) onUpdated(updated);
     } else {
       setSaveError(data.error || "Save failed.");
     }
   }
 
-  function handleCancelEdit() {
-    setDraft({ ...customer });
-    setEditing(false);
-    setSaveError("");
-  }
+  const EDIT_FIELDS = [
+    { label: "Category",         field: "category",   type: "select-category" },
+    { label: "First Name",       field: "firstName" },
+    { label: "Middle Name",      field: "middleName" },
+    { label: "Last Name",        field: "lastName" },
+    { label: "Primary Mobile",   field: "mobile1",    type: "tel", maxLen: 10 },
+    { label: "Secondary Mobile", field: "mobile2",    type: "tel", maxLen: 10 },
+    { label: "Address 1",        field: "address1" },
+    { label: "Address 2",        field: "address2" },
+    { label: "Area",             field: "area" },
+    { label: "City",             field: "city" },
+    { label: "District",         field: "district" },
+    { label: "State",            field: "state" },
+    { label: "Pincode",          field: "pincode",    maxLen: 6 },
+    { label: "Blood Group",      field: "bloodGroup", type: "select-blood" },
+    { label: "Religion",         field: "religion" },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        {/* Header */}
         <div className={`px-6 py-4 flex items-center justify-between ${editing ? "bg-amber-500" : "bg-sky-500"}`}>
           <div>
             <p className={`text-xs uppercase tracking-widest mb-0.5 ${editing ? "text-amber-100" : "text-sky-100"}`}>
-              {editing ? "Editing Customer" : "Customer Found"}
+              {editing ? "Editing Customer" : "Customer Details"}
             </p>
             <h2 className="text-lg font-bold text-white uppercase">
               {customer.firstName} {customer.middleName} {customer.lastName}
@@ -304,31 +280,18 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
           <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none">&times;</button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
           {!editing && customer.category && (
             <span className="inline-block mb-3 px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full text-xs font-semibold border border-sky-200 uppercase">
               {customer.category}
             </span>
           )}
-
           {editing ? (
             <div className="space-y-0.5">
-              <EField label="Category"         field="category" type="select-category" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="First Name"       field="firstName"  draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Middle Name"      field="middleName" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Last Name"        field="lastName"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Primary Mobile"   field="mobile1" type="tel" maxLen={10} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Secondary Mobile" field="mobile2" type="tel" maxLen={10} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Address 1"        field="address1"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Address 2"        field="address2"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Area"             field="area"       draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="City"             field="city"       draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="District"         field="district"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="State"            field="state"      draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Pincode"          field="pincode" maxLen={6} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Blood Group"      field="bloodGroup" type="select-blood" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
-              <EField label="Religion"         field="religion"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              {EDIT_FIELDS.map(f => (
+                <EField key={f.field} {...f} draft={draft} setD={setD} setDCap={setDCap}
+                  isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              ))}
               {saveError && (
                 <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{saveError}</p>
               )}
@@ -350,49 +313,34 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-3 bg-slate-50 flex justify-between items-center border-t border-slate-100">
-          <p className="text-xs text-slate-400">
-            Added {new Date(customer.createdAt).toLocaleDateString("en-IN")}
-          </p>
+          <p className="text-xs text-slate-400">Added {new Date(customer.createdAt).toLocaleDateString("en-IN")}</p>
           <div className="flex gap-2">
             {editing ? (
               <>
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 transition"
-                >
+                <button onClick={() => { setDraft({ ...customer }); setEditing(false); setSaveError(""); }}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 transition">
                   Cancel
                 </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-60 flex items-center gap-1.5"
-                >
-                  {saving && <Spinner size={13} />}
-                  {saving ? "Saving…" : "Save Changes"}
+                <button onClick={handleSave} disabled={saving}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-60 flex items-center gap-1.5">
+                  {saving && <Spinner size={13} />}{saving ? "Saving…" : "Save Changes"}
                 </button>
               </>
             ) : (
               <>
                 {isAdmin && (
-                  <>
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 transition"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition"
-                    >
-                      {deleting ? "Deleting…" : "Delete"}
-                    </button>
-                  </>
+                  <button onClick={handleDelete} disabled={deleting}
+                    className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition">
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
                 )}
-                <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                <button onClick={() => setEditing(true)}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 transition">
+                  Edit
+                </button>
+                <button onClick={onClose}
+                  className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
                   Close
                 </button>
               </>
@@ -404,93 +352,29 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
   );
 }
 
-// ── Export Bar (Admin only) ───────────────────────────────────────────────────
-function ExportBar({ categories }) {
-  const [category,   setCategory]   = useState("");
-  const [bloodGroup, setBloodGroup] = useState("");
-  const [religion,   setReligion]   = useState("");
-  const [city,       setCity]       = useState("");
-  const [name,       setName]       = useState("");
-  const [fields,     setFields]     = useState("full");
-  const [loading,    setLoading]    = useState(null);
-
-  function buildQS() {
-    const p = new URLSearchParams();
-    if (category)   p.set("category",   category);
-    if (bloodGroup) p.set("bloodGroup", bloodGroup);
-    if (religion)   p.set("religion",   religion);
-    if (city)       p.set("city",       city);
-    if (name)       p.set("name",       name);
-    p.set("fields", fields);
-    return p.toString();
-  }
-
-  async function handleExport(format) {
-    setLoading(format);
-    window.location.href = `/api/customers/export?format=${format}&${buildQS()}`;
-    setTimeout(() => setLoading(null), 2500);
-  }
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
-        Export Customers
-      </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-        {/* Category uses select in export too */}
-        <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls}>
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={bloodGroup} onChange={e => setBloodGroup(e.target.value)} className={inputCls}>
-          <option value="">All Blood Groups</option>
-          {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
-        </select>
-        <input placeholder="Religion filter" value={religion} onChange={e => setReligion(cap(e.target.value))} className={inputCls} />
-        <input placeholder="City filter"     value={city}     onChange={e => setCity(cap(e.target.value))}     className={inputCls} />
-        <input placeholder="Name filter"     value={name}     onChange={e => setName(cap(e.target.value))}     className={inputCls} />
+// ── Customer table ────────────────────────────────────────────────────────────
+function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, onPageChange }) {
+  const totalPages = Math.ceil(total / limit);
+  if (!customers.length) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl py-16 text-center shadow-sm">
+        <p className="text-4xl mb-3">🔍</p>
+        <p className="text-slate-500 text-sm font-medium">No customers match your filters.</p>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
-          {[["full","Full Details"],["namephone","Name & Phone Only"]].map(([val, lbl], i) => (
-            <button key={val} onClick={() => setFields(val)}
-              className={`px-3 py-1.5 font-medium transition ${i > 0 ? "border-l border-slate-200" : ""} ${fields === val ? "bg-sky-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 ml-auto">
-          {[["csv","CSV","📄"],["excel","Excel","📊"],["pdf","PDF","📑"]].map(([fmt, lbl, icon]) => (
-            <button key={fmt} onClick={() => handleExport(fmt)} disabled={!!loading}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition disabled:opacity-60">
-              {loading === fmt ? <Spinner size={14} /> : <span>{icon}</span>}
-              {lbl}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Customer Table ────────────────────────────────────────────────────────────
-function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }) {
-  if (customers.length === 0) {
-    return <p className="text-center text-slate-400 text-sm py-10">No customers found.</p>;
+    );
   }
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
         <p className="text-sm text-slate-500">
-          Showing <strong>{customers.length}</strong> of <strong>{total}</strong> customers
+          Showing <strong>{(page - 1) * limit + 1}–{Math.min(page * limit, total)}</strong> of <strong>{total}</strong> customers
         </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-left">
-              {["#", "Name", "Mobile 1", "Mobile 2", "City", "Blood Group", "Religion", ""].map(h => (
+              {["#", "Name", "Mobile 1", "Mobile 2", "City", "Blood", "Religion", ""].map(h => (
                 <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -498,7 +382,7 @@ function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }
           <tbody>
             {customers.map((c, i) => (
               <tr key={c._id} className="border-t border-slate-100 hover:bg-sky-50/40 transition">
-                <td className="px-4 py-2.5 text-slate-400">{(page - 1) * 20 + i + 1}</td>
+                <td className="px-4 py-2.5 text-slate-400 text-xs">{(page - 1) * limit + i + 1}</td>
                 <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap uppercase">
                   {c.firstName} {c.middleName} {c.lastName}
                   {c.category && (
@@ -525,50 +409,82 @@ function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }
           </tbody>
         </table>
       </div>
-      {total > 20 && (
+      {totalPages > 1 && (
         <div className="px-5 py-3 border-t border-slate-100 flex gap-2 justify-end items-center">
           <button disabled={page === 1} onClick={() => onPageChange(page - 1)}
-            className="px-3 py-1 rounded-lg border text-sm disabled:opacity-40 hover:bg-slate-50">← Prev</button>
-          <span className="px-3 py-1 text-sm text-slate-600">Page {page} of {Math.ceil(total / 20)}</span>
-          <button disabled={page >= Math.ceil(total / 20)} onClick={() => onPageChange(page + 1)}
-            className="px-3 py-1 rounded-lg border text-sm disabled:opacity-40 hover:bg-slate-50">Next →</button>
+            className="px-3 py-1 rounded-lg border text-sm disabled:opacity-40 hover:bg-slate-50 transition">← Prev</button>
+          <span className="px-3 py-1 text-sm text-slate-600">Page {page} of {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}
+            className="px-3 py-1 rounded-lg border text-sm disabled:opacity-40 hover:bg-slate-50 transition">Next →</button>
         </div>
       )}
     </div>
   );
 }
 
+// ── Active filter pills ───────────────────────────────────────────────────────
+function FilterPills({ filters, onRemove }) {
+  const active = Object.entries(filters).filter(([, v]) => v);
+  if (!active.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {active.map(([k, v]) => (
+        <span key={k} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+          <span className="text-sky-400 uppercase tracking-wide" style={{ fontSize: 10 }}>{k}</span>
+          {v}
+          <button onClick={() => onRemove(k)} className="ml-0.5 text-sky-400 hover:text-sky-700 leading-none">×</button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ── Search Panel ──────────────────────────────────────────────────────────────
 function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
-  const [filters, setFilters] = useState({ search: "", bloodGroup: "", religion: "", city: "", name: "" });
+  const [filters,   setFilters]   = useState(EMPTY_FILTERS);
+  const [applied,   setApplied]   = useState(EMPTY_FILTERS); // last-searched state
   const [customers, setCustomers] = useState([]);
   const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
   const [loading,   setLoading]   = useState(false);
   const [popup,     setPopup]     = useState(null);
 
-  const setF = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+  const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
 
-  useEffect(() => { doSearch(1, {}); }, []);
-
-  async function doSearch(p = 1, overrideFilters) {
+  const doSearch = useCallback(async (p, f) => {
     setLoading(true);
-    const f = overrideFilters ?? filters;
-    const qs = new URLSearchParams({ ...f, page: p, limit: 20 });
-    const res  = await fetch(`/api/customers?${qs}`);
-    const data = await res.json();
-    setCustomers(data.customers || []);
-    setTotal(data.total || 0);
-    setPage(p);
+    try {
+      const qs   = filtersToQS(f, { page: p, limit: 20 });
+      const res  = await fetch(`/api/customers?${qs}`);
+      const data = await res.json();
+      setCustomers(data.customers || []);
+      setTotal(data.total || 0);
+      setPage(p);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
+  }, []);
+
+  // Load all on mount
+  useEffect(() => { doSearch(1, EMPTY_FILTERS); }, []);
+
+  function handleSearch() {
+    setApplied(filters);
+    doSearch(1, filters);
   }
 
-  function handleSearch() { doSearch(1); }
-
   function handleReset() {
-    const empty = { search: "", bloodGroup: "", religion: "", city: "", name: "" };
-    setFilters(empty);
-    doSearch(1, empty);
+    setFilters(EMPTY_FILTERS);
+    setApplied(EMPTY_FILTERS);
+    doSearch(1, EMPTY_FILTERS);
+  }
+
+  function removeFilter(k) {
+    const next = { ...applied, [k]: "" };
+    setFilters(next);
+    setApplied(next);
+    doSearch(1, next);
   }
 
   function handleUpdated(updated) {
@@ -578,33 +494,50 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
 
   return (
     <div className="space-y-4">
+      {/* Filter card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
           Search Customers
+          {total > 0 && <span className="ml-auto text-xs font-normal text-slate-400">{total.toLocaleString()} result{total !== 1 ? "s" : ""}</span>}
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-          <input placeholder="Name / Mobile / City…" value={filters.search}
+
+        {/* Row 1 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+          <input placeholder="Name / Mobile / City…"
+            value={filters.search}
             onChange={e => setF("search", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
-            className={`${inputCls} col-span-2 sm:col-span-1`} />
-          <input placeholder="Name" value={filters.name}
+            className={`${inputCls} lg:col-span-2`} />
+          <input placeholder="Name"
+            value={filters.name}
             onChange={e => setF("name", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
+        </div>
+
+        {/* Row 2 */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <select value={filters.category} onChange={e => setF("category", e.target.value)} className={inputCls}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <select value={filters.bloodGroup} onChange={e => setF("bloodGroup", e.target.value)} className={inputCls}>
             <option value="">All Blood Groups</option>
             {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
           </select>
-          <input placeholder="Religion" value={filters.religion}
+          <input placeholder="Religion"
+            value={filters.religion}
             onChange={e => setF("religion", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
-          <input placeholder="City" value={filters.city}
+          <input placeholder="City"
+            value={filters.city}
             onChange={e => setF("city", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
         </div>
+
         <div className="flex gap-2">
           <button onClick={handleSearch}
             className="px-6 py-2 rounded-lg bg-sky-500 text-white text-sm font-semibold hover:bg-sky-600 transition">
@@ -617,28 +550,143 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
         </div>
       </div>
 
+      <FilterPills filters={applied} onRemove={removeFilter} />
+
       {loading ? (
         <div className="flex justify-center py-16"><Spinner size={32} /></div>
       ) : (
         <CustomerTable
-          customers={customers}
-          page={page}
-          total={total}
-          isAdmin={isAdmin}
-          onView={setPopup}
-          onPageChange={p => doSearch(p)}
+          customers={customers} page={page} total={total} limit={20}
+          isAdmin={isAdmin} onView={setPopup}
+          onPageChange={p => doSearch(p, applied)}
         />
       )}
 
       {popup && (
-        <CustomerPopup
-          customer={popup}
-          isAdmin={isAdmin}
-          categories={categories}
-          onCategoryAdded={onCategoryAdded}
-          onClose={() => setPopup(null)}
-          onDeleted={() => doSearch(page)}
-          onUpdated={handleUpdated}
+        <CustomerPopup customer={popup} isAdmin={isAdmin} categories={categories}
+          onCategoryAdded={onCategoryAdded} onClose={() => setPopup(null)}
+          onDeleted={() => doSearch(page, applied)} onUpdated={handleUpdated} />
+      )}
+    </div>
+  );
+}
+
+// ── Export Bar ────────────────────────────────────────────────────────────────
+function ExportBar({ categories }) {
+  const EXPORT_EMPTY = { category: "", bloodGroup: "", name: "", religion: "", city: "" };
+  const [filters,  setFilters]  = useState(EXPORT_EMPTY);
+  const [fields,   setFields]   = useState("full");
+  const [loading,  setLoading]  = useState(null);
+  const [preview,  setPreview]  = useState(null);
+  const [counting, setCounting] = useState(false);
+
+  const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
+
+  // Debounced count preview
+  const countRef = useRef(null);
+  useEffect(() => {
+    clearTimeout(countRef.current);
+    countRef.current = setTimeout(async () => {
+      setCounting(true);
+      try {
+        const qs   = filtersToQS(filters, { page: 1, limit: 1 });
+        const res  = await fetch(`/api/customers?${qs}`);
+        const data = await res.json();
+        setPreview({ total: data.total ?? 0 });
+      } catch { /* silent */ }
+      setCounting(false);
+    }, 500);
+    return () => clearTimeout(countRef.current);
+  }, [filters]);
+
+  function handleExport(format) {
+    setLoading(format);
+    const qs = filtersToQS(filters, { fields });
+    window.location.href = `/api/customers/export?format=${format}&${qs}`;
+    setTimeout(() => setLoading(null), 2500);
+  }
+
+  const hasFilters = Object.values(filters).some(Boolean);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-slate-700 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
+            Export Customers
+          </h3>
+          {hasFilters && (
+            <button onClick={() => setFilters(EXPORT_EMPTY)} className="text-xs text-slate-400 hover:text-slate-600 transition">
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* Row 1 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+          <select value={filters.category} onChange={e => setF("category", e.target.value)} className={inputCls}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filters.bloodGroup} onChange={e => setF("bloodGroup", e.target.value)} className={inputCls}>
+            <option value="">All Blood Groups</option>
+            {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
+          </select>
+          <input placeholder="Name filter" value={filters.name}
+            onChange={e => setF("name", cap(e.target.value))} className={inputCls} />
+        </div>
+
+        {/* Row 2 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <input placeholder="Religion filter" value={filters.religion}
+            onChange={e => setF("religion", cap(e.target.value))} className={inputCls} />
+          <input placeholder="City filter" value={filters.city}
+            onChange={e => setF("city", cap(e.target.value))} className={inputCls} />
+        </div>
+
+        {/* Fields toggle + count */}
+        <div className="flex flex-wrap items-center gap-3 pb-5 border-b border-slate-100 mb-5">
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
+            {[["full", "Full Details"], ["namephone", "Name & Phone Only"]].map(([val, lbl], i) => (
+              <button key={val} onClick={() => setFields(val)}
+                className={`px-3 py-1.5 font-medium transition ${i > 0 ? "border-l border-slate-200" : ""} ${fields === val ? "bg-sky-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {counting ? (
+              <span className="text-xs text-slate-400 flex items-center gap-1"><Spinner size={11} /> Counting…</span>
+            ) : preview !== null ? (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${preview.total === 0 ? "bg-red-50 text-red-600 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                {preview.total.toLocaleString()} record{preview.total !== 1 ? "s" : ""} will export
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Export buttons */}
+        <div className="flex flex-wrap gap-2">
+          {[["csv", "CSV"], ["excel", "Excel"], ["pdf", "PDF"]].map(([fmt, lbl]) => (
+            <button key={fmt} onClick={() => handleExport(fmt)}
+              disabled={!!loading || preview?.total === 0}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading === fmt ? <Spinner size={14} /> : null}
+              Export {lbl}
+            </button>
+          ))}
+        </div>
+
+        {preview?.total === 0 && (
+          <p className="mt-3 text-xs text-red-500">No records match — adjust filters before exporting.</p>
+        )}
+      </div>
+
+      {hasFilters && (
+        <FilterPills
+          filters={filters}
+          onRemove={k => setF(k, "")}
         />
       )}
     </div>
@@ -661,15 +709,12 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
 
   const set    = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCap = (k, v) => setForm(f => ({ ...f, [k]: cap(v) }));
-  const showForm = mob1Status === "new";
 
   const checkMobile = useCallback((mobile, field) => {
     const ref       = field === "mobile1" ? debounce1 : debounce2;
     const setStatus = field === "mobile1" ? setMob1Status : setMob2Status;
-
     clearTimeout(ref.current);
     if (!mobile || mobile.length !== 10) { setStatus("idle"); return; }
-
     setStatus("checking");
     ref.current = setTimeout(async () => {
       try {
@@ -693,11 +738,10 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
+    e.preventDefault(); setError("");
     if (!form.mobile1 || form.mobile1.length !== 10) { setError("Primary mobile must be 10 digits."); return; }
-    if (!form.firstName.trim())  { setError("First name is required."); return; }
-    if (!form.lastName.trim())   { setError("Last name is required."); return; }
+    if (!form.firstName.trim()) { setError("First name is required."); return; }
+    if (!form.lastName.trim())  { setError("Last name is required."); return; }
 
     setSubmitting(true);
     const res  = await fetch("/api/customers", {
@@ -709,10 +753,8 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
     setSubmitting(false);
 
     if (res.ok) {
-      setSuccess(true);
-      setForm(EMPTY_FORM);
-      setMob1Status("idle");
-      setMob2Status("idle");
+      setSuccess(true); setForm(EMPTY_FORM);
+      setMob1Status("idle"); setMob2Status("idle");
       setTimeout(() => setSuccess(false), 4000);
     } else {
       setError(data.error || "Something went wrong.");
@@ -721,7 +763,7 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
 
   const mob1Hint = {
     idle:     <p className="text-xs text-slate-400 mt-1">Enter 10-digit number — we'll check the database</p>,
-    checking: <p className="text-xs text-sky-500 mt-1 flex items-center gap-1"><Spinner size={11} /> Checking database…</p>,
+    checking: <p className="text-xs text-sky-500 mt-1 flex items-center gap-1"><Spinner size={11} /> Checking…</p>,
     new:      <p className="text-xs text-emerald-600 mt-1">✓ Number is new — fill the form below</p>,
     exists:   <p className="text-xs text-amber-600 mt-1">⚠ Already registered — details shown above</p>,
   }[mob1Status];
@@ -733,51 +775,40 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
     exists:   <p className="text-xs text-amber-600 mt-1">⚠ This number belongs to another customer</p>,
   }[mob2Status];
 
+  const showForm = mob1Status === "new";
+
   return (
     <>
       {showPopup && matchedCustomer && (
-        <CustomerPopup
-          customer={matchedCustomer}
-          isAdmin={isAdmin}
-          categories={categories}
+        <CustomerPopup customer={matchedCustomer} isAdmin={isAdmin} categories={categories}
           onCategoryAdded={onCategoryAdded}
           onClose={() => { setShowPopup(false); setMatchedCustomer(null); }}
-          onDeleted={() => {}}
-          onUpdated={(updated) => setMatchedCustomer(updated)}
-        />
+          onDeleted={() => {}} onUpdated={updated => setMatchedCustomer(updated)} />
       )}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
-        {/* Mobile Numbers */}
+        {/* Mobile */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
-            Mobile Numbers
+            <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />Mobile Numbers
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <Field label="Primary Mobile No." required>
               <div className="relative">
-                <input type="tel" inputMode="numeric" maxLength={10}
-                  placeholder="10-digit number"
-                  value={form.mobile1}
-                  onChange={e => handleMobileChange("mobile1", e.target.value)}
-                  className={`${inputCls} pr-9 ${mob1Status === "exists" ? "border-amber-300 ring-amber-200" : mob1Status === "new" ? "border-emerald-300" : ""}`}
-                />
+                <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number"
+                  value={form.mobile1} onChange={e => handleMobileChange("mobile1", e.target.value)}
+                  className={`${inputCls} pr-9 ${mob1Status === "exists" ? "border-amber-300 ring-amber-200" : mob1Status === "new" ? "border-emerald-300" : ""}`} />
                 {mob1Status === "checking" && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>}
-                {mob1Status === "new"      && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-base">✓</span>}
-                {mob1Status === "exists"   && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 text-base">!</span>}
+                {mob1Status === "new"      && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">✓</span>}
+                {mob1Status === "exists"   && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500">!</span>}
               </div>
               {mob1Hint}
             </Field>
-
             <Field label="Secondary Mobile No.">
               <div className="relative">
-                <input type="tel" inputMode="numeric" maxLength={10}
-                  placeholder="10-digit number (optional)"
-                  value={form.mobile2}
-                  onChange={e => handleMobileChange("mobile2", e.target.value)}
-                  className={`${inputCls} pr-9 ${mob2Status === "exists" ? "border-amber-300" : mob2Status === "new" ? "border-emerald-300" : ""}`}
-                />
+                <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number (optional)"
+                  value={form.mobile2} onChange={e => handleMobileChange("mobile2", e.target.value)}
+                  className={`${inputCls} pr-9 ${mob2Status === "exists" ? "border-amber-300" : mob2Status === "new" ? "border-emerald-300" : ""}`} />
                 {mob2Status === "checking" && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>}
               </div>
               {mob2Hint}
@@ -790,25 +821,18 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
             {/* Category */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
-                Category
+                <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />Category
               </h3>
               <Field label="Category">
-                <CategorySelect
-                  value={form.category}
-                  onChange={v => set("category", v)}
-                  isAdmin={isAdmin}
-                  categories={categories}
-                  onCategoryAdded={onCategoryAdded}
-                />
+                <CategorySelect value={form.category} onChange={v => set("category", v)}
+                  isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
               </Field>
             </div>
 
             {/* Name */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                Full Name
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Full Name
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="First Name" required>
@@ -829,8 +853,7 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
             {/* Address */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                Address
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Address
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Address Line 1">
@@ -842,32 +865,24 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
                     value={form.address2} onChange={e => setCap("address2", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Area">
-                  <div>
-                    <input type="text" placeholder="AREA / LOCALITY"
-                      value={form.area} onChange={e => setCap("area", e.target.value)} className={inputCls} />
-                    <SuggestionChips field="area" value={form.area} onSelect={v => set("area", v)} />
-                  </div>
+                  <input type="text" placeholder="AREA / LOCALITY"
+                    value={form.area} onChange={e => setCap("area", e.target.value)} className={inputCls} />
+                  <SuggestionChips field="area" value={form.area} onSelect={v => set("area", v)} />
                 </Field>
                 <Field label="City">
-                  <div>
-                    <input type="text" placeholder="CITY"
-                      value={form.city} onChange={e => setCap("city", e.target.value)} className={inputCls} />
-                    <SuggestionChips field="city" value={form.city} onSelect={v => set("city", v)} />
-                  </div>
+                  <input type="text" placeholder="CITY"
+                    value={form.city} onChange={e => setCap("city", e.target.value)} className={inputCls} />
+                  <SuggestionChips field="city" value={form.city} onSelect={v => set("city", v)} />
                 </Field>
                 <Field label="District">
-                  <div>
-                    <input type="text" placeholder="DISTRICT"
-                      value={form.district} onChange={e => setCap("district", e.target.value)} className={inputCls} />
-                    <SuggestionChips field="district" value={form.district} onSelect={v => set("district", v)} />
-                  </div>
+                  <input type="text" placeholder="DISTRICT"
+                    value={form.district} onChange={e => setCap("district", e.target.value)} className={inputCls} />
+                  <SuggestionChips field="district" value={form.district} onSelect={v => set("district", v)} />
                 </Field>
                 <Field label="State">
-                  <div>
-                    <input type="text" placeholder="STATE"
-                      value={form.state} onChange={e => setCap("state", e.target.value)} className={inputCls} />
-                    <SuggestionChips field="state" value={form.state} onSelect={v => set("state", v)} />
-                  </div>
+                  <input type="text" placeholder="STATE"
+                    value={form.state} onChange={e => setCap("state", e.target.value)} className={inputCls} />
+                  <SuggestionChips field="state" value={form.state} onSelect={v => set("state", v)} />
                 </Field>
                 <Field label="Pincode">
                   <input type="text" inputMode="numeric" maxLength={6} placeholder="6-DIGIT PINCODE"
@@ -878,11 +893,10 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
               </div>
             </div>
 
-            {/* Other Details */}
+            {/* Other */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-                Other Details
+                <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Other Details
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Blood Group">
@@ -891,11 +905,9 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
                   </select>
                 </Field>
                 <Field label="Religion">
-                  <div>
-                    <input type="text" placeholder="E.G. HINDU, ISLAM, CHRISTIAN…"
-                      value={form.religion} onChange={e => setCap("religion", e.target.value)} className={inputCls} />
-                    <SuggestionChips field="religion" value={form.religion} onSelect={v => set("religion", v)} />
-                  </div>
+                  <input type="text" placeholder="E.G. HINDU, ISLAM, CHRISTIAN…"
+                    value={form.religion} onChange={e => setCap("religion", e.target.value)} className={inputCls} />
+                  <SuggestionChips field="religion" value={form.religion} onSelect={v => set("religion", v)} />
                 </Field>
               </div>
             </div>
@@ -921,7 +933,7 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
   );
 }
 
-// ── Tabs config ───────────────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = {
   admin:    [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }, { key: "export", label: "Export" }],
   accounts: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }],
@@ -936,7 +948,6 @@ export default function AddCustomerPage() {
   const role    = session?.user?.role;
   const isAdmin = role === "admin";
 
-  // Load categories from DB on mount
   useEffect(() => {
     fetch("/api/categories")
       .then(r => r.json())
@@ -944,10 +955,7 @@ export default function AddCustomerPage() {
       .catch(() => {});
   }, []);
 
-  // Called when a new category is added (from any widget)
-  function handleCategoryAdded(newList, _selected) {
-    setCategories(newList);
-  }
+  function handleCategoryAdded(newList) { setCategories(newList); }
 
   if (status === "loading") {
     return (
@@ -960,9 +968,7 @@ export default function AddCustomerPage() {
     );
   }
 
-  if (!session || (role !== "admin" && role !== "accounts")) {
-    return <NotFoundPage />;
-  }
+  if (!session || (role !== "admin" && role !== "accounts")) return <NotFoundPage />;
 
   const tabs = TABS[role] || TABS.accounts;
 

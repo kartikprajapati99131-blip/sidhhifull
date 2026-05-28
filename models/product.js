@@ -14,8 +14,9 @@ const variantSchema = new mongoose.Schema(
 const imageSchema = new mongoose.Schema(
   {
     url:       { type: String, required: true },
-    // ✅ FIX: public_id is no longer required so legacy docs (and Cloudinary
-    //    uploads that didn't store public_id) don't fail validation on save.
+
+    // ✅ FIX: public_id is no longer required so legacy docs
+    // and Cloudinary uploads without public_id still work
     public_id: { type: String, default: "" },
   },
   { _id: false }
@@ -29,7 +30,7 @@ const productSchema = new mongoose.Schema(
     price:     { type: Number },
     priceUnit: { type: String }, // e.g. "sqft" for wood
 
-    description: { type: String },
+    description: { type: String, default: "" },
 
     type: {
       type: String,
@@ -48,6 +49,19 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
 
+    // ── NEW FIELDS ─────────────────────────────────────────────
+    brand: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    subCategory: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     variants: [variantSchema],
 
     tags: {
@@ -56,19 +70,14 @@ const productSchema = new mongoose.Schema(
       default: [],
     },
 
-    // ─── Multi-image gallery ───────────────────────────────────────────────
-    // images[0] is treated as the primary / cover image throughout the UI.
-    // Max 6 images enforced at the application layer (not schema level so
-    // existing single-image docs stay valid after migration).
+    // ─── Multi-image gallery ──────────────────────────────────
+    // images[0] is treated as the primary / cover image
     images: {
-      type:    [imageSchema],
+      type: [imageSchema],
       default: [],
     },
 
-    // ─── Legacy single-image field (kept for backward compat, read-only) ──
-    // Old documents in MongoDB may have this field. The UI now only reads
-    // from `images[]`, falling back to `image.url` for display. New saves
-    // never write to this field.
+    // ─── Legacy single-image field (backward compatibility) ──
     image: {
       url:       { type: String },
       public_id: { type: String },
@@ -76,9 +85,8 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    // ✅ FIX: toJSON transform guarantees `images` is always an array even
-    //    for old DB documents that were saved before the field existed.
-    //    This means product.images is NEVER undefined anywhere in the app.
+
+    // ✅ Ensure images is always an array
     toJSON: {
       transform(doc, ret) {
         if (!Array.isArray(ret.images)) {
@@ -87,6 +95,7 @@ const productSchema = new mongoose.Schema(
         return ret;
       },
     },
+
     toObject: {
       transform(doc, ret) {
         if (!Array.isArray(ret.images)) {

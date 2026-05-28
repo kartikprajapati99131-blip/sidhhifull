@@ -25,6 +25,7 @@ export default function Navbar() {
         { href: "/addproduct", label: "Add Product", dot: "bg-blue-500" },
         { href: "/products", label: "Products", dot: "bg-emerald-500" },
         { href: "/orders", label: "Orders", dot: "bg-amber-500" },
+        { href: "/brands", label: "Brands", dot: "bg-amber-500" },
       ],
     },
     {
