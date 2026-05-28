@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/db/connectDb";
-import Customer from "@/models/Customer";
+import Customer from "@/models/leads";
 
 /**
  * GET /api/customer

@@ -68,7 +68,7 @@ export async function PUT(req, { params }) {
         }
 
         // handle role update
-        const allowedRoles = ["admin", "user", "staff", "mistry", "architect"];
+        const allowedRoles = ["admin", "user", "accounts", "staff", "mistry", "architect"];
         if (!allowedRoles.includes(body.role)) {
             return NextResponse.json({ error: "Invalid role" }, { status: 400 });
         }

@@ -12,6 +12,8 @@
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.9.0",
     "framer-motion": "^12.38.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.8.0",
     "mongoose": "^9.4.1",
     "mongose": "^0.0.2-security",

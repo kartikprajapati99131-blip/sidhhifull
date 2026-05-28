@@ -245,7 +245,7 @@ export default function RippleNavbar() {
 
           {/* Brand */}
           <div className="relative z-10 flex items-center">
-             <Link href="/cart">
+            <Link href="/cart">
               <div className="relative flex items-center justify-center w-10 h-10 rounded-2xl hover:bg-sky-50 transition-all duration-200">
                 <ShoppingCart
                   size={20}
@@ -265,7 +265,7 @@ export default function RippleNavbar() {
           {/* Right Actions */}
           <div className="relative z-10 flex items-center gap-10">
             {/* Cart */}
-           
+
 
             {/* Hamburger */}
             <button
@@ -291,7 +291,7 @@ export default function RippleNavbar() {
         {/* Mobile Dropdown */}
         <div
           className={`
-      overflow-hidden transition-all duration-300 ease-in-out
+      overflow-hidden transition-all duration-300 ease-in-out 
       ${menuOpen
               ? "max-h-[500px] opacity-100 mt-4"
               : "max-h-0 opacity-0"

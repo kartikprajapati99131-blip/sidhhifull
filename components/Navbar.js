@@ -12,33 +12,36 @@ export default function Navbar() {
   const [mistryOpen, setMistryOpen] = useState(false);
   const dropRef = useRef(null);
 
-  const isAdmin  = session?.user?.role === "admin";
-  const isStaff  = session?.user?.role === "staff";
+  const isAdmin = session?.user?.role === "admin";
+  const isStaff = session?.user?.role === "staff";
   const isMistry = session?.user?.role === "mistry";
-  const isUser   = session?.user?.role === "user";
+  const isUser = session?.user?.role === "user";
+  const isAccounts = session?.user?.role === "accounts";
 
   const adminSections = [
     {
       title: "Catalog",
       items: [
-        { href: "/addproduct",    label: "Add Product",     dot: "bg-blue-500" },
-        { href: "/products",      label: "Products",        dot: "bg-emerald-500" },
-        { href: "/orders",        label: "Orders",          dot: "bg-amber-500" },
+        { href: "/addproduct", label: "Add Product", dot: "bg-blue-500" },
+        { href: "/products", label: "Products", dot: "bg-emerald-500" },
+        { href: "/orders", label: "Orders", dot: "bg-amber-500" },
       ],
     },
     {
       title: "People",
       items: [
-        { href: "/users",         label: "All Users",       dot: "bg-violet-500" },
-        { href: "/customer",      label: "Customer's Data", dot: "bg-sky-500" },
-        { href: "/allattendance", label: "Attendance",      dot: "bg-teal-500" },
+        { href: "/users", label: "All Users", dot: "bg-violet-500" },
+        { href: "/customer", label: "Customer's Data", dot: "bg-sky-500" },
+        { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
+        { href: "/add-customer", label: "Add Customer", dot: "bg-sky-500" },
+
       ],
     },
     {
       title: "Misc",
       items: [
-        { href: "/allrewiew",     label: "Reviews",         dot: "bg-rose-500" },
-        { href: "/question",      label: "Questions",       dot: "bg-slate-400" },
+        { href: "/allrewiew", label: "Reviews", dot: "bg-rose-500" },
+        { href: "/question", label: "Questions", dot: "bg-slate-400" },
       ],
     },
   ];
@@ -109,11 +112,11 @@ export default function Navbar() {
                   {staffOpen && (
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
-                        { href: `/profile/${session.user.id}`, label: "Profile",      dot: "bg-slate-400" },
-                        { href: "/orders",                     label: "Orders",        dot: "bg-amber-500" },
-                        { href: "/attandance",                 label: "Attendance",    dot: "bg-teal-500" },
-                        { href: "/customer",                   label: "Customers",     dot: "bg-sky-500" },
-                        { href: `/rewiew/${session.user.id}`,  label: "Your Review",   dot: "bg-rose-400" },
+                        { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
+                        { href: "/orders", label: "Orders", dot: "bg-amber-500" },
+                        { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/customer", label: "Customers", dot: "bg-sky-500" },
+                        { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
                       ))}
@@ -138,8 +141,8 @@ export default function Navbar() {
                   {mistryOpen && (
                     <DropPanel onClose={() => setMistryOpen(false)}>
                       {[
-                        { href: `/profile/${session.user.id}`, label: "Profile",   dot: "bg-slate-400" },
-                        { href: "/customer",                   label: "Customers", dot: "bg-sky-500" },
+                        { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
+                        { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setMistryOpen(false)} />
                       ))}
@@ -174,6 +177,35 @@ export default function Navbar() {
                             <DropLink key={it.href} {...it} close={() => setAdminOpen(false)} />
                           ))}
                         </React.Fragment>
+                      ))}
+                      <div className="h-px bg-slate-100 mx-2 my-1" />
+                      <SignOutRow />
+                    </DropPanel>
+                  )}
+                </div>
+              )}
+
+              {isAccounts && (
+                <div className="relative">
+                  <button
+                    onClick={() => setStaffOpen((v) => !v)}
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[12px] font-semibold shadow shadow-blue-200 hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-200" />
+                    Staff
+                    <ChevronDown size={13} className={`transition-transform duration-200 ${staffOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {staffOpen && (
+                    <DropPanel onClose={() => setStaffOpen(false)}>
+                      {[
+                        { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
+                        { href: "/orders", label: "Orders", dot: "bg-amber-500" },
+                        { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/customer", label: "Customers", dot: "bg-sky-500" },
+                        { href: "/add-customer", label: "Add Customer", dot: "bg-sky-500" },
+                        { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
+                      ].map((it) => (
+                        <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
                       ))}
                       <div className="h-px bg-slate-100 mx-2 my-1" />
                       <SignOutRow />
