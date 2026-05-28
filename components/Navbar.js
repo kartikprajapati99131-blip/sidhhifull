@@ -31,9 +31,9 @@ export default function Navbar() {
       title: "People",
       items: [
         { href: "/users", label: "All Users", dot: "bg-violet-500" },
-        { href: "/customer", label: "Customer's Data", dot: "bg-sky-500" },
+        { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
-        { href: "/add-customer", label: "Add Customer", dot: "bg-sky-500" },
+        { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
 
       ],
     },
@@ -189,9 +189,9 @@ export default function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setStaffOpen((v) => !v)}
-                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[12px] font-semibold shadow shadow-blue-200 hover:opacity-90 active:scale-95 transition-all"
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-500 text-white text-[12px] font-semibold shadow shadow-orange-200 hover:opacity-90 active:scale-95 transition-all"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-200" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-200" />
                     Staff
                     <ChevronDown size={13} className={`transition-transform duration-200 ${staffOpen ? "rotate-180" : ""}`} />
                   </button>
@@ -201,8 +201,8 @@ export default function Navbar() {
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
                         { href: "/orders", label: "Orders", dot: "bg-amber-500" },
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
-                        { href: "/customer", label: "Customers", dot: "bg-sky-500" },
-                        { href: "/add-customer", label: "Add Customer", dot: "bg-sky-500" },
+                        { href: "/customer", label: "Customer leads", dot: "bg-sky-500" },
+                        { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
                         { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />

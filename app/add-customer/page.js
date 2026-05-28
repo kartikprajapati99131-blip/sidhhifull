@@ -12,10 +12,19 @@ const EMPTY_FORM = {
   bloodGroup: "", religion: "",
 };
 
+// ── Suggested words per field ─────────────────────────────────────────────────
+const SUGGESTIONS = {
+  religion:  ["HINDU", "ISLAM", "CHRISTIAN", "SIKH", "JAIN", "BUDDHIST", "PARSI", "OTHER"],
+  city:      ["AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "PALANPUR", "GANDHINAGAR", "ANAND", "MEHSANA"],
+  district:  ["BANASKANTHA", "AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "GANDHINAGAR", "ANAND", "MEHSANA"],
+  state:     ["GUJARAT", "MAHARASHTRA", "RAJASTHAN", "MADHYA PRADESH", "DELHI", "UTTAR PRADESH"],
+  area:      ["MAIN ROAD", "NEAR BUS STAND", "NEAR RAILWAY STATION", "BEHIND HOSPITAL", "NEAR TEMPLE"],
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const cap = (v) => (typeof v === "string" ? v.toUpperCase() : v);
 
-// ── Shared UI ────────────────────────────────────────────────────────────────
+// ── Shared UI ─────────────────────────────────────────────────────────────────
 function Field({ label, required, children, className = "" }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
@@ -41,7 +50,177 @@ function Spinner({ size = 16 }) {
   );
 }
 
-// ── 404 Page ─────────────────────────────────────────────────────────────────
+// ── Suggestion Chips ──────────────────────────────────────────────────────────
+function SuggestionChips({ field, value, onSelect }) {
+  const list = SUGGESTIONS[field];
+  if (!list) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {list.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onSelect(s)}
+          className={`px-2 py-0.5 rounded-full text-xs font-medium border transition
+            ${value === s
+              ? "bg-sky-500 text-white border-sky-500"
+              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-300"
+            }`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Category Select + Add (admin) ─────────────────────────────────────────────
+function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded }) {
+  const [adding,   setAdding]   = useState(false);
+  const [newCat,   setNewCat]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [addError, setAddError] = useState("");
+
+  async function handleAdd() {
+    const trimmed = newCat.trim().toUpperCase();
+    if (!trimmed) { setAddError("Enter a category name."); return; }
+    setSaving(true);
+    setAddError("");
+    const res  = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (res.ok) {
+      onCategoryAdded(data.categories, trimmed);
+      onChange(trimmed);
+      setNewCat("");
+      setAdding(false);
+    } else {
+      setAddError(data.error || "Failed to add.");
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <select
+          value={value || ""}
+          onChange={e => onChange(e.target.value)}
+          className={`${inputCls} flex-1`}
+        >
+          <option value="">— Select Category —</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => { setAdding(a => !a); setAddError(""); setNewCat(""); }}
+            className={`px-3 py-2 rounded-lg text-sm font-semibold border transition whitespace-nowrap
+              ${adding
+                ? "bg-slate-100 text-slate-500 border-slate-200"
+                : "bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-100"}`}
+          >
+            {adding ? "✕ Cancel" : "+ New"}
+          </button>
+        )}
+      </div>
+
+      {adding && isAdmin && (
+        <div className="flex gap-2 items-start">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="NEW CATEGORY NAME"
+              value={newCat}
+              onChange={e => { setNewCat(e.target.value.toUpperCase()); setAddError(""); }}
+              onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAdd())}
+              className={inputCls}
+              autoFocus
+            />
+            {addError && <p className="text-xs text-red-500 mt-1">{addError}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-500 text-white hover:bg-violet-600 transition disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap"
+          >
+            {saving && <Spinner size={12} />}
+            {saving ? "Adding…" : "Add"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Popup Read-only Row (top-level — never recreated) ────────────────────────
+function PopupRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div className="flex gap-2 py-1.5 border-b border-slate-100 last:border-0">
+      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm text-slate-700 font-medium uppercase">{value}</span>
+    </div>
+  );
+}
+
+// ── Popup Edit Field (top-level — never recreated on parent render) ───────────
+const popupInputCls =
+  "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
+  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
+
+function EField({ label, field, type = "text", maxLen, draft, setD, setDCap, isAdmin, categories, onCategoryAdded }) {
+  return (
+    <div className="py-1.5 border-b border-slate-100 last:border-0">
+      <div className="flex gap-2 items-center">
+        <span className="text-xs text-slate-400 w-28 shrink-0">{label}</span>
+        {type === "select-blood" ? (
+          <select
+            value={draft[field] || ""}
+            onChange={e => setD(field, e.target.value)}
+            className={popupInputCls}
+          >
+            {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b || "— Select —"}</option>)}
+          </select>
+        ) : type === "select-category" ? (
+          <div className="flex-1">
+            <CategorySelect
+              value={draft.category || ""}
+              onChange={v => setD("category", v)}
+              isAdmin={isAdmin}
+              categories={categories}
+              onCategoryAdded={onCategoryAdded}
+            />
+          </div>
+        ) : (
+          <input
+            type={type}
+            inputMode={type === "tel" ? "numeric" : undefined}
+            maxLength={maxLen}
+            value={draft[field] || ""}
+            onChange={e => setDCap(field, e.target.value)}
+            className={popupInputCls}
+          />
+        )}
+      </div>
+      {type !== "select-blood" && type !== "select-category" && SUGGESTIONS[field] && (
+        <div className="ml-28 pl-2 mt-1">
+          <SuggestionChips
+            field={field}
+            value={draft[field] || ""}
+            onSelect={v => setD(field, v)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 404 Page ──────────────────────────────────────────────────────────────────
 function NotFoundPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -57,8 +236,8 @@ function NotFoundPage() {
   );
 }
 
-// ── Customer Detail / Edit Popup ─────────────────────────────────────────────
-function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdated, isAdmin }) {
+// ── Customer Detail / Edit Popup ──────────────────────────────────────────────
+function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdated, isAdmin, categories, onCategoryAdded }) {
   const [customer, setCustomer] = useState(initialCustomer);
   const [editing,  setEditing]  = useState(false);
   const [draft,    setDraft]    = useState({ ...initialCustomer });
@@ -66,7 +245,7 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const setD = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const setD    = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const setDCap = (k, v) => setDraft(d => ({ ...d, [k]: cap(v) }));
 
   async function handleDelete() {
@@ -109,44 +288,6 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
     setSaveError("");
   }
 
-  // ── Read-only row ───────────────────────────────────────────────────────────
-  const Row = ({ label, value }) =>
-    value ? (
-      <div className="flex gap-2 py-1.5 border-b border-slate-100 last:border-0">
-        <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
-        <span className="text-sm text-slate-700 font-medium uppercase">{value}</span>
-      </div>
-    ) : null;
-
-  // ── Edit input inside popup ─────────────────────────────────────────────────
-  const popupInputCls =
-    "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
-    "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
-
-  const EField = ({ label, field, type = "text", maxLen }) => (
-    <div className="flex gap-2 py-1.5 border-b border-slate-100 last:border-0 items-center">
-      <span className="text-xs text-slate-400 w-28 shrink-0">{label}</span>
-      {type === "select-blood" ? (
-        <select
-          value={draft[field] || ""}
-          onChange={e => setD(field, e.target.value)}
-          className={popupInputCls}
-        >
-          {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b || "— Select —"}</option>)}
-        </select>
-      ) : (
-        <input
-          type={type}
-          inputMode={type === "tel" ? "numeric" : undefined}
-          maxLength={maxLen}
-          value={draft[field] || ""}
-          onChange={e => setDCap(field, e.target.value)}
-          className={popupInputCls}
-        />
-      )}
-    </div>
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -173,38 +314,38 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
 
           {editing ? (
             <div className="space-y-0.5">
-              <EField label="Category"         field="category" />
-              <EField label="First Name"       field="firstName" />
-              <EField label="Middle Name"      field="middleName" />
-              <EField label="Last Name"        field="lastName" />
-              <EField label="Primary Mobile"   field="mobile1" type="tel" maxLen={10} />
-              <EField label="Secondary Mobile" field="mobile2" type="tel" maxLen={10} />
-              <EField label="Address 1"        field="address1" />
-              <EField label="Address 2"        field="address2" />
-              <EField label="Area"             field="area" />
-              <EField label="City"             field="city" />
-              <EField label="District"         field="district" />
-              <EField label="State"            field="state" />
-              <EField label="Pincode"          field="pincode" maxLen={6} />
-              <EField label="Blood Group"      field="bloodGroup" type="select-blood" />
-              <EField label="Religion"         field="religion" />
+              <EField label="Category"         field="category" type="select-category" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="First Name"       field="firstName"  draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Middle Name"      field="middleName" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Last Name"        field="lastName"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Primary Mobile"   field="mobile1" type="tel" maxLen={10} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Secondary Mobile" field="mobile2" type="tel" maxLen={10} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Address 1"        field="address1"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Address 2"        field="address2"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Area"             field="area"       draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="City"             field="city"       draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="District"         field="district"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="State"            field="state"      draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Pincode"          field="pincode" maxLen={6} draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Blood Group"      field="bloodGroup" type="select-blood" draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
+              <EField label="Religion"         field="religion"   draft={draft} setD={setD} setDCap={setDCap} isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
               {saveError && (
                 <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{saveError}</p>
               )}
             </div>
           ) : (
             <>
-              <Row label="Primary Mobile"   value={customer.mobile1} />
-              <Row label="Secondary Mobile" value={customer.mobile2} />
-              <Row label="Address 1"        value={customer.address1} />
-              <Row label="Address 2"        value={customer.address2} />
-              <Row label="Area"             value={customer.area} />
-              <Row label="City"             value={customer.city} />
-              <Row label="District"         value={customer.district} />
-              <Row label="State"            value={customer.state} />
-              <Row label="Pincode"          value={customer.pincode} />
-              <Row label="Blood Group"      value={customer.bloodGroup} />
-              <Row label="Religion"         value={customer.religion} />
+              <PopupRow label="Primary Mobile"   value={customer.mobile1} />
+              <PopupRow label="Secondary Mobile" value={customer.mobile2} />
+              <PopupRow label="Address 1"        value={customer.address1} />
+              <PopupRow label="Address 2"        value={customer.address2} />
+              <PopupRow label="Area"             value={customer.area} />
+              <PopupRow label="City"             value={customer.city} />
+              <PopupRow label="District"         value={customer.district} />
+              <PopupRow label="State"            value={customer.state} />
+              <PopupRow label="Pincode"          value={customer.pincode} />
+              <PopupRow label="Blood Group"      value={customer.bloodGroup} />
+              <PopupRow label="Religion"         value={customer.religion} />
             </>
           )}
         </div>
@@ -263,8 +404,8 @@ function CustomerPopup({ customer: initialCustomer, onClose, onDeleted, onUpdate
   );
 }
 
-// ── Export Bar (Admin only) ──────────────────────────────────────────────────
-function ExportBar() {
+// ── Export Bar (Admin only) ───────────────────────────────────────────────────
+function ExportBar({ categories }) {
   const [category,   setCategory]   = useState("");
   const [bloodGroup, setBloodGroup] = useState("");
   const [religion,   setReligion]   = useState("");
@@ -297,7 +438,11 @@ function ExportBar() {
         Export Customers
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-        <input placeholder="Category filter" value={category} onChange={e => setCategory(cap(e.target.value))} className={inputCls} />
+        {/* Category uses select in export too */}
+        <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls}>
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
         <select value={bloodGroup} onChange={e => setBloodGroup(e.target.value)} className={inputCls}>
           <option value="">All Blood Groups</option>
           {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
@@ -329,7 +474,7 @@ function ExportBar() {
   );
 }
 
-// ── Customer Table ───────────────────────────────────────────────────────────
+// ── Customer Table ────────────────────────────────────────────────────────────
 function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }) {
   if (customers.length === 0) {
     return <p className="text-center text-slate-400 text-sm py-10">No customers found.</p>;
@@ -393,8 +538,8 @@ function CustomerTable({ customers, page, total, isAdmin, onView, onPageChange }
   );
 }
 
-// ── Search Panel ─────────────────────────────────────────────────────────────
-function SearchPanel({ isAdmin }) {
+// ── Search Panel ──────────────────────────────────────────────────────────────
+function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
   const [filters, setFilters] = useState({ search: "", bloodGroup: "", religion: "", city: "", name: "" });
   const [customers, setCustomers] = useState([]);
   const [total,     setTotal]     = useState(0);
@@ -426,7 +571,6 @@ function SearchPanel({ isAdmin }) {
     doSearch(1, empty);
   }
 
-  // Update the popup customer in-place after an edit
   function handleUpdated(updated) {
     setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
     setPopup(updated);
@@ -490,6 +634,8 @@ function SearchPanel({ isAdmin }) {
         <CustomerPopup
           customer={popup}
           isAdmin={isAdmin}
+          categories={categories}
+          onCategoryAdded={onCategoryAdded}
           onClose={() => setPopup(null)}
           onDeleted={() => doSearch(page)}
           onUpdated={handleUpdated}
@@ -499,8 +645,8 @@ function SearchPanel({ isAdmin }) {
   );
 }
 
-// ── Add Form ─────────────────────────────────────────────────────────────────
-function AddForm({ isAdmin, userEmail }) {
+// ── Add Form ──────────────────────────────────────────────────────────────────
+function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
   const [form,       setForm]       = useState(EMPTY_FORM);
   const [mob1Status, setMob1Status] = useState("idle");
   const [mob2Status, setMob2Status] = useState("idle");
@@ -593,6 +739,8 @@ function AddForm({ isAdmin, userEmail }) {
         <CustomerPopup
           customer={matchedCustomer}
           isAdmin={isAdmin}
+          categories={categories}
+          onCategoryAdded={onCategoryAdded}
           onClose={() => { setShowPopup(false); setMatchedCustomer(null); }}
           onDeleted={() => {}}
           onUpdated={(updated) => setMatchedCustomer(updated)}
@@ -646,8 +794,13 @@ function AddForm({ isAdmin, userEmail }) {
                 Category
               </h3>
               <Field label="Category">
-                <input type="text" placeholder="e.g. VIP, REGULAR, CORPORATE…"
-                  value={form.category} onChange={e => setCap("category", e.target.value)} className={inputCls} />
+                <CategorySelect
+                  value={form.category}
+                  onChange={v => set("category", v)}
+                  isAdmin={isAdmin}
+                  categories={categories}
+                  onCategoryAdded={onCategoryAdded}
+                />
               </Field>
             </div>
 
@@ -689,20 +842,32 @@ function AddForm({ isAdmin, userEmail }) {
                     value={form.address2} onChange={e => setCap("address2", e.target.value)} className={inputCls} />
                 </Field>
                 <Field label="Area">
-                  <input type="text" placeholder="AREA / LOCALITY"
-                    value={form.area} onChange={e => setCap("area", e.target.value)} className={inputCls} />
+                  <div>
+                    <input type="text" placeholder="AREA / LOCALITY"
+                      value={form.area} onChange={e => setCap("area", e.target.value)} className={inputCls} />
+                    <SuggestionChips field="area" value={form.area} onSelect={v => set("area", v)} />
+                  </div>
                 </Field>
                 <Field label="City">
-                  <input type="text" placeholder="CITY"
-                    value={form.city} onChange={e => setCap("city", e.target.value)} className={inputCls} />
+                  <div>
+                    <input type="text" placeholder="CITY"
+                      value={form.city} onChange={e => setCap("city", e.target.value)} className={inputCls} />
+                    <SuggestionChips field="city" value={form.city} onSelect={v => set("city", v)} />
+                  </div>
                 </Field>
                 <Field label="District">
-                  <input type="text" placeholder="DISTRICT"
-                    value={form.district} onChange={e => setCap("district", e.target.value)} className={inputCls} />
+                  <div>
+                    <input type="text" placeholder="DISTRICT"
+                      value={form.district} onChange={e => setCap("district", e.target.value)} className={inputCls} />
+                    <SuggestionChips field="district" value={form.district} onSelect={v => set("district", v)} />
+                  </div>
                 </Field>
                 <Field label="State">
-                  <input type="text" placeholder="STATE"
-                    value={form.state} onChange={e => setCap("state", e.target.value)} className={inputCls} />
+                  <div>
+                    <input type="text" placeholder="STATE"
+                      value={form.state} onChange={e => setCap("state", e.target.value)} className={inputCls} />
+                    <SuggestionChips field="state" value={form.state} onSelect={v => set("state", v)} />
+                  </div>
                 </Field>
                 <Field label="Pincode">
                   <input type="text" inputMode="numeric" maxLength={6} placeholder="6-DIGIT PINCODE"
@@ -726,8 +891,11 @@ function AddForm({ isAdmin, userEmail }) {
                   </select>
                 </Field>
                 <Field label="Religion">
-                  <input type="text" placeholder="E.G. HINDU, ISLAM, CHRISTIAN…"
-                    value={form.religion} onChange={e => setCap("religion", e.target.value)} className={inputCls} />
+                  <div>
+                    <input type="text" placeholder="E.G. HINDU, ISLAM, CHRISTIAN…"
+                      value={form.religion} onChange={e => setCap("religion", e.target.value)} className={inputCls} />
+                    <SuggestionChips field="religion" value={form.religion} onSelect={v => set("religion", v)} />
+                  </div>
                 </Field>
               </div>
             </div>
@@ -762,10 +930,24 @@ const TABS = {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AddCustomerPage() {
   const { data: session, status } = useSession();
-  const [tab, setTab] = useState("add");
+  const [tab,        setTab]        = useState("add");
+  const [categories, setCategories] = useState([]);
 
   const role    = session?.user?.role;
   const isAdmin = role === "admin";
+
+  // Load categories from DB on mount
+  useEffect(() => {
+    fetch("/api/categories")
+      .then(r => r.json())
+      .then(d => setCategories(d.categories || []))
+      .catch(() => {});
+  }, []);
+
+  // Called when a new category is added (from any widget)
+  function handleCategoryAdded(newList, _selected) {
+    setCategories(newList);
+  }
 
   if (status === "loading") {
     return (
@@ -778,7 +960,6 @@ export default function AddCustomerPage() {
     );
   }
 
-  // 404 for unauthenticated users or unknown roles
   if (!session || (role !== "admin" && role !== "accounts")) {
     return <NotFoundPage />;
   }
@@ -816,9 +997,9 @@ export default function AddCustomerPage() {
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
-        {tab === "add"    && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} />}
-        {tab === "search" && <SearchPanel isAdmin={isAdmin} />}
-        {tab === "export" && isAdmin && <ExportBar />}
+        {tab === "add"    && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "search" && <SearchPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "export" && isAdmin && <ExportBar categories={categories} />}
       </div>
     </div>
   );
