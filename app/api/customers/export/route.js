@@ -30,6 +30,10 @@ async function fetchFiltered(searchParams) {
   return Customer.find(query).sort({ createdAt: -1 }).lean();
 }
 
+// Merge first, middle, last into one clean string
+const fullName = (c) =>
+  [c.firstName, c.middleName, c.lastName].filter(Boolean).join(" ");
+
 export async function GET(request) {
   try {
     await connectDb();
@@ -41,25 +45,21 @@ export async function GET(request) {
     const customers = await fetchFiltered(searchParams);
 
     // ── Build rows ────────────────────────────────────────────────────────────
-    const namePhoneHeaders = ["Sr.No", "First Name", "Middle Name", "Last Name", "Mobile 1", "Mobile 2"];
+    const namePhoneHeaders = ["Sr.No", "Name", "Mobile 1", "Mobile 2"];
     const fullHeaders = [
-      "Sr.No","First Name","Middle Name","Last Name",
-      "Address 1","Address 2","Area","City","District","State","Pincode",
-      "Blood Group","Religion","Mobile 1","Mobile 2","Category",
+      "Sr.No", "Name",
+      "Address 1", "Address 2", "Area", "City", "District", "State", "Pincode",
+      "Blood Group", "Religion", "Mobile 1", "Mobile 2", "Category",
     ];
 
     const headers = fields === "namephone" ? namePhoneHeaders : fullHeaders;
 
     const rows = customers.map((c, i) => {
-      const base = [
-        i + 1,
-        c.firstName, c.middleName, c.lastName,
-      ];
       if (fields === "namephone") {
-        return [...base, c.mobile1, c.mobile2];
+        return [i + 1, fullName(c), c.mobile1, c.mobile2];
       }
       return [
-        ...base,
+        i + 1, fullName(c),
         c.address1, c.address2, c.area, c.city, c.district, c.state, c.pincode,
         c.bloodGroup, c.religion, c.mobile1, c.mobile2, c.category,
       ];
@@ -83,8 +83,8 @@ export async function GET(request) {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      // Column widths
-      ws["!cols"] = headers.map(() => ({ wch: 18 }));
+      // Column widths — Name column wider, rest standard
+      ws["!cols"] = headers.map((h) => ({ wch: h === "Name" ? 30 : 18 }));
       XLSX.utils.book_append_sheet(wb, ws, "Customers");
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
       return new NextResponse(buf, {
@@ -112,6 +112,9 @@ export async function GET(request) {
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [240, 249, 255] },
+        columnStyles: {
+          1: { cellWidth: 40 }, // Name column wider
+        },
       });
       const pdfBytes = doc.output("arraybuffer");
       return new NextResponse(pdfBytes, {
