@@ -30,13 +30,14 @@ export default function Footer() {
           {/* Social icons under brand */}
           <div className="flex gap-3 mt-5">
             {[
-              { Icon: FaFacebook, label: "Facebook" },
-              { Icon: FaInstagram, label: "Instagram" },
-              { Icon: FaTwitter, label: "Twitter" },
-              { Icon: FaLinkedin, label: "LinkedIn" },
-            ].map(({ Icon, label }) => (
-              <button
+              { Icon: FaFacebook, label: "Facebook", url: "https://www.facebook.com/share/1ECXx6cwp2/" },
+              { Icon: FaInstagram, label: "Instagram", url: "https://www.instagram.com/siddhi__2009?igsh=MXVsOWV6dzdibGF3Zw==" },
+            ].map(({ Icon, label, url }) => (
+              <a
                 key={label}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={label}
                 style={{
                   width: 34, height: 34, borderRadius: '50%',
@@ -45,6 +46,7 @@ export default function Footer() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', transition: 'background 0.2s, border-color 0.2s',
                   color: 'rgba(0,0,0,0.55)',
+                  textDecoration: 'none',
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.background = '#b8956a'
@@ -58,7 +60,7 @@ export default function Footer() {
                 }}
               >
                 <Icon size={14} />
-              </button>
+              </a>
             ))}
           </div>
         </div>
