@@ -53,7 +53,6 @@ function PointsModal({ user, onClose, onSuccess }) {
     }
   };
 
-  // close on backdrop click
   const handleBackdrop = (e) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -183,7 +182,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState(null);
   const [filterRole, setFilterRole] = useState("all");
-  const [pointsUser, setPointsUser] = useState(null); // user for modal
+  const [pointsUser, setPointsUser] = useState(null);
 
   const fetchUsers = async () => {
     try {
@@ -199,7 +198,6 @@ export default function UsersPage() {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  // ✅ Your existing changeRole — untouched
   const changeRole = async (id, role) => {
     setUpdating(id);
     try {
@@ -217,7 +215,6 @@ export default function UsersPage() {
     }
   };
 
-  // optimistic points update — no re-fetch needed
   const handlePointsSuccess = (userId, amount) => {
     setUsers((prev) =>
       prev.map((u) =>
@@ -249,7 +246,7 @@ export default function UsersPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
         {/* PAGE HEADER */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Management</h1>
           <p className="text-sm text-gray-400 mt-1">
             {users.length} total members · {filtered.length} shown
@@ -257,8 +254,8 @@ export default function UsersPage() {
         </div>
 
         {/* SEARCH + FILTER BAR */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 mb-5">
+          <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
@@ -270,14 +267,24 @@ export default function UsersPage() {
               className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >
+                ×
+              </button>
             )}
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+          {/* Role filter chips — horizontally scrollable */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
             <button
               onClick={() => setFilterRole("all")}
-              className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${filterRole === "all" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"}`}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                filterRole === "all"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
             >
               All
             </button>
@@ -285,7 +292,11 @@ export default function UsersPage() {
               <button
                 key={r}
                 onClick={() => setFilterRole(r)}
-                className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border capitalize transition-all ${filterRole === r ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"}`}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border capitalize transition-all ${
+                  filterRole === r
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                }`}
               >
                 {r}
               </button>
@@ -300,75 +311,63 @@ export default function UsersPage() {
             <p className="text-sm">No users match your search.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-
-            {/* Desktop Header — 6 cols now */}
-            <div className="hidden sm:grid grid-cols-[2fr_2fr_1fr_0.8fr_1.5fr_1fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              <span>User</span>
-              <span>Email</span>
-              <span>Role</span>
-              <span>Points</span>
-              <span>Change Role</span>
-              <span>Actions</span>
-            </div>
-
-            <div className="divide-y divide-gray-50">
+          <>
+            {/* ── MOBILE CARD LIST (hidden on sm+) ── */}
+            <div className="sm:hidden flex flex-col gap-3">
               {filtered.map((user) => (
                 <div
                   key={user._id}
-                  className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_1fr_0.8fr_1.5fr_1fr] gap-3 sm:gap-4 px-5 py-4 items-center hover:bg-gray-50/60 transition-colors"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-4"
                 >
-                  {/* Name + Avatar */}
-                  <div className="flex items-center gap-3">
+                  {/* Top: avatar + name/email + role badge */}
+                  <div className="flex items-center gap-3 mb-3">
                     <Avatar name={user.name} />
-                    <span className="text-sm font-semibold text-gray-900 truncate">{user.name || "—"}</span>
-                  </div>
-
-                  {/* Email */}
-                  <span className="text-sm text-gray-500 truncate pl-12 sm:pl-0">{user.email}</span>
-
-                  {/* Role Badge */}
-                  <div className="pl-12 sm:pl-0">
-                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border capitalize ${ROLE_STYLES[user.role] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{user.name || "—"}</p>
+                      <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border capitalize ${
+                        ROLE_STYLES[user.role] || "bg-gray-100 text-gray-600 border-gray-200"
+                      }`}
+                    >
                       {user.role}
                     </span>
                   </div>
 
                   {/* Points */}
-                  <div className="pl-12 sm:pl-0">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <span className="text-xs text-gray-400 font-medium">Points:</span>
                     <span className="text-sm font-black text-amber-500">{user.points || 0}</span>
-                    <span className="text-xs text-gray-400 ml-1">pts</span>
+                    <span className="text-xs text-gray-400">pts</span>
                   </div>
 
-                  {/* Role Selector — ✅ your existing logic untouched */}
-                  <div className="pl-12 sm:pl-0 flex items-center gap-2">
-                    <select
-                      value={user.role}
-                      disabled={updating === user._id}
-                      onChange={(e) => changeRole(user._id, e.target.value)}
-                      className="text-sm bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r} className="capitalize">{r}</option>
-                      ))}
-                    </select>
-                    {updating === user._id && (
-                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                    )}
-                  </div>
-
-                  {/* Actions — NEW */}
-                  <div className="pl-12 sm:pl-0 flex items-center gap-2">
+                  {/* Actions: role select + buttons */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <select
+                        value={user.role}
+                        disabled={updating === user._id}
+                        onChange={(e) => changeRole(user._id, e.target.value)}
+                        className="flex-1 min-w-0 text-sm bg-white border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r} className="capitalize">{r}</option>
+                        ))}
+                      </select>
+                      {updating === user._id && (
+                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      )}
+                    </div>
                     <button
                       onClick={() => setPointsUser(user)}
-                      title="Manage points"
-                      className="text-xs bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition font-semibold whitespace-nowrap"
+                      className="flex-shrink-0 text-xs bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-lg hover:bg-amber-100 transition font-semibold whitespace-nowrap"
                     >
                       ⭐ Pts
                     </button>
                     <Link
                       href={`/profile/${user._id}`}
-                      className="text-xs bg-gray-100 border border-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition font-semibold"
+                      className="flex-shrink-0 text-xs bg-gray-100 border border-gray-200 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 transition font-semibold"
                     >
                       View
                     </Link>
@@ -376,7 +375,85 @@ export default function UsersPage() {
                 </div>
               ))}
             </div>
-          </div>
+
+            {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+            <div className="hidden sm:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              {/* Desktop Header */}
+              <div className="grid grid-cols-[2fr_2fr_1fr_0.8fr_1.5fr_1fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                <span>User</span>
+                <span>Email</span>
+                <span>Role</span>
+                <span>Points</span>
+                <span>Change Role</span>
+                <span>Actions</span>
+              </div>
+
+              <div className="divide-y divide-gray-50">
+                {filtered.map((user) => (
+                  <div
+                    key={user._id}
+                    className="grid grid-cols-[2fr_2fr_1fr_0.8fr_1.5fr_1fr] gap-4 px-5 py-4 items-center hover:bg-gray-50/60 transition-colors"
+                  >
+                    {/* Name + Avatar */}
+                    <div className="flex items-center gap-3">
+                      <Avatar name={user.name} />
+                      <span className="text-sm font-semibold text-gray-900 truncate">{user.name || "—"}</span>
+                    </div>
+
+                    {/* Email */}
+                    <span className="text-sm text-gray-500 truncate">{user.email}</span>
+
+                    {/* Role Badge */}
+                    <div>
+                      <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border capitalize ${ROLE_STYLES[user.role] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                        {user.role}
+                      </span>
+                    </div>
+
+                    {/* Points */}
+                    <div>
+                      <span className="text-sm font-black text-amber-500">{user.points || 0}</span>
+                      <span className="text-xs text-gray-400 ml-1">pts</span>
+                    </div>
+
+                    {/* Role Selector */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={user.role}
+                        disabled={updating === user._id}
+                        onChange={(e) => changeRole(user._id, e.target.value)}
+                        className="text-sm bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r} className="capitalize">{r}</option>
+                        ))}
+                      </select>
+                      {updating === user._id && (
+                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPointsUser(user)}
+                        title="Manage points"
+                        className="text-xs bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition font-semibold whitespace-nowrap"
+                      >
+                        ⭐ Pts
+                      </button>
+                      <Link
+                        href={`/profile/${user._id}`}
+                        className="text-xs bg-gray-100 border border-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition font-semibold"
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
 
