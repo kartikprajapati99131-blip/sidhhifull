@@ -1,7 +1,7 @@
 "use client";
 
 import { useCart } from "@/context/CartContext";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import AllProduct from "@/components/allproduct";
 
@@ -26,17 +26,55 @@ export default function ProductClient({ product }) {
   const hasVariants =
     Array.isArray(product.variants) && product.variants.length > 0;
 
-  // ✅ FIX: Correctly read images array; fallback to legacy image.url field
-  const images = Array.isArray(product.images) && product.images.length > 0
-    ? product.images.map((img) => (typeof img === "string" ? img : img.url))
-    : product.image?.url
-    ? [product.image.url]
-    : [];
+  const images =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images.map((img) => (typeof img === "string" ? img : img.url))
+      : product.image?.url
+      ? [product.image.url]
+      : [];
 
-  const [selectedImage, setSelectedImage]   = useState(images[0] || "");
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(
     hasVariants ? product.variants[0] : null
   );
+
+  // ── swipe state ────────────────────────────────────────────────────────
+  const touchStartX = useRef(null);
+  const touchEndX = useRef(null);
+  const MIN_SWIPE = 40;
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = null;
+  };
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) return;
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) < MIN_SWIPE) return;
+    if (diff > 0) {
+      // swipe left → next
+      setSelectedIndex((i) => (i + 1) % images.length);
+    } else {
+      // swipe right → prev
+      setSelectedIndex((i) => (i - 1 + images.length) % images.length);
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  // ── scroll thumbnails on desktop ───────────────────────────────────────
+  const thumbRef = useRef(null);
+  const handleWheel = (e) => {
+    if (thumbRef.current) {
+      e.preventDefault();
+      thumbRef.current.scrollTop += e.deltaY;
+    }
+  };
+
+  const selectedImage = images[selectedIndex] || "";
 
   const priceDisplay = hasVariants
     ? selectedVariant
@@ -48,14 +86,13 @@ export default function ProductClient({ product }) {
 
   const typeLabel = TYPE_LABEL[product.type] || product.type;
 
-  // ── Add to cart ──────────────────────────────────────────────────────────
+  // ── Add to cart ────────────────────────────────────────────────────────
   const handleAddToCart = () => {
     const cartItem = hasVariants
       ? {
           ...product,
           price: selectedVariant?.price,
           selectedVariant: selectedVariant?.label,
-          // ✅ FIX: pass cover image so cart page can show it
           image: { url: images[0] || "" },
         }
       : {
@@ -75,7 +112,7 @@ export default function ProductClient({ product }) {
     });
   };
 
-  // ── WhatsApp enquiry ─────────────────────────────────────────────────────
+  // ── WhatsApp enquiry ───────────────────────────────────────────────────
   const handleWhatsAppEnquiry = () => {
     const pageUrl =
       typeof window !== "undefined" ? window.location.href : "";
@@ -93,9 +130,7 @@ export default function ProductClient({ product }) {
         ? `📐 Size / Option: ${selectedVariant.label}`
         : null,
       `💰 Price: ${priceText}`,
-      product.description
-        ? `📝 Description: ${product.description}`
-        : null,
+      product.description ? `📝 Description: ${product.description}` : null,
       ``,
       pageUrl ? `🔗 Product Link: ${pageUrl}` : null,
       ``,
@@ -130,54 +165,156 @@ export default function ProductClient({ product }) {
 
       <div className="max-w-7xl mx-auto p-6 md:p-12 grid md:grid-cols-2 gap-14">
 
-        {/* ── LEFT: IMAGE GALLERY ─────────────────────────────────────────── */}
+        {/* ── LEFT: IMAGE GALLERY ──────────────────────────────────────── */}
         <div className="flex gap-4">
 
-          {/* Thumbnails */}
-          <div className="flex flex-col gap-3">
-            {images.map((img, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedImage(img)}
-                aria-label={`View image ${i + 1}`}
-                className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 ${
-                  selectedImage === img
-                    ? "border-green-500 scale-[1.05] shadow-md"
-                    : "border-transparent hover:border-gray-300"
-                }`}
-              >
-                <img
-                  src={img}
-                  alt={`${product.name} view ${i + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              </button>
-            ))}
-          </div>
+          {/* Thumbnails — vertical scroll on desktop, hidden on mobile */}
+          {images.length > 1 && (
+            <div
+              ref={thumbRef}
+              onWheel={handleWheel}
+              className="hidden md:flex flex-col gap-3 overflow-y-auto max-h-[600px] pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
+              style={{ scrollbarWidth: "thin" }}
+            >
+              {images.map((img, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedIndex(i)}
+                  aria-label={`View image ${i + 1}`}
+                  className={`flex-shrink-0 w-16 rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 ${
+                    selectedIndex === i
+                      ? "border-green-500 scale-[1.05] shadow-md"
+                      : "border-transparent hover:border-gray-300"
+                  }`}
+                  // ✅ portrait thumb: 4:5 ratio
+                  style={{ aspectRatio: "4/5" }}
+                >
+                  <img
+                    src={img}
+                    alt={`${product.name} view ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
 
-          {/* Main Image */}
-          <div className="relative flex-1 overflow-hidden rounded-2xl bg-gray-100 shadow-sm aspect-square">
-            {selectedImage ? (
-              <img
-                key={selectedImage}
-                src={selectedImage}
-                alt={product.name}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
-                <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                No image
+          {/* Main image — portrait (4:5), swipeable on mobile */}
+          <div className="flex-1 flex flex-col gap-3">
+            <div
+              className="relative w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm select-none"
+              // ✅ portrait aspect ratio
+              style={{ aspectRatio: "4/5" }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {selectedImage ? (
+                <img
+                  key={selectedImage}
+                  src={selectedImage}
+                  alt={product.name}
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                  draggable={false}
+                />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
+                  <svg
+                    className="w-10 h-10 opacity-30"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  No image
+                </div>
+              )}
+
+              {/* Swipe arrow hints on mobile (only if multiple images) */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={() =>
+                      setSelectedIndex(
+                        (i) => (i - 1 + images.length) % images.length
+                      )
+                    }
+                    className="md:hidden absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-1.5 shadow text-gray-700 active:scale-95 transition"
+                    aria-label="Previous image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setSelectedIndex((i) => (i + 1) % images.length)
+                    }
+                    className="md:hidden absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-1.5 shadow text-gray-700 active:scale-95 transition"
+                    aria-label="Next image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
+
+              {/* Dot indicators on mobile */}
+              {images.length > 1 && (
+                <div className="md:hidden absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  {images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedIndex(i)}
+                      aria-label={`Go to image ${i + 1}`}
+                      className={`rounded-full transition-all duration-200 ${
+                        selectedIndex === i
+                          ? "w-4 h-1.5 bg-green-500"
+                          : "w-1.5 h-1.5 bg-white/70"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile horizontal thumbnail strip */}
+            {images.length > 1 && (
+              <div className="md:hidden flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {images.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedIndex(i)}
+                    aria-label={`View image ${i + 1}`}
+                    className={`flex-shrink-0 w-14 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                      selectedIndex === i
+                        ? "border-green-500 scale-[1.04]"
+                        : "border-transparent hover:border-gray-300"
+                    }`}
+                    style={{ aspectRatio: "4/5" }}
+                  >
+                    <img
+                      src={img}
+                      alt={`${product.name} view ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── RIGHT: DETAILS ──────────────────────────────────────────────── */}
+        {/* ── RIGHT: DETAILS ───────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 md:sticky md:top-20 h-fit">
 
           {/* Title */}
@@ -192,7 +329,7 @@ export default function ProductClient({ product }) {
             </span>
           )}
 
-          {/* ── Variant selector ─────────────────────────────────────────── */}
+          {/* Variant selector */}
           {hasVariants && (
             <div className="mt-1">
               <p className="text-sm font-semibold text-gray-600 mb-2">
@@ -236,9 +373,7 @@ export default function ProductClient({ product }) {
                 )}
               </>
             ) : (
-              <span className="text-gray-400 text-lg">
-                Contact for price
-              </span>
+              <span className="text-gray-400 text-lg">Contact for price</span>
             )}
           </div>
 
@@ -257,7 +392,12 @@ export default function ProductClient({ product }) {
           {/* CTA Buttons */}
           <div className="flex flex-col gap-3 mt-6">
             {/* Add to Cart */}
-            
+            <button
+              onClick={handleAddToCart}
+              className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 active:scale-[0.98] text-white py-3 rounded-xl font-semibold transition-all duration-150"
+            >
+              Add to Cart
+            </button>
 
             {/* WhatsApp Enquiry */}
             <button

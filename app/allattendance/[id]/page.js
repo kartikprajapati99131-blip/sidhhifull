@@ -7,10 +7,8 @@ export default function UserAttendancePage() {
 
     const formatHours = (hours) => {
         if (!hours) return "0 hr";
-
         const h = Math.floor(hours);
         const m = Math.round((hours - h) * 60);
-
         return `${h} hr ${m} min`;
     };
 
@@ -27,7 +25,6 @@ export default function UserAttendancePage() {
             .then((res) => {
                 const records = Array.isArray(res) ? res : res.data || res.attendance || [];
 
-                // Group by date
                 const grouped = {};
                 records.forEach((record) => {
                     const date = record.date;
@@ -39,27 +36,23 @@ export default function UserAttendancePage() {
                     });
                 });
 
-                // Group by month
                 const byMonth = {};
                 Object.values(grouped).forEach((day) => {
-                    const monthKey = day.date.slice(0, 7); // "2026-04"
+                    const monthKey = day.date.slice(0, 7);
                     if (!byMonth[monthKey]) byMonth[monthKey] = { monthKey, days: [] };
                     byMonth[monthKey].days.push(day);
                 });
 
-                // Sort months descending, keep only last 2
                 const sortedMonths = Object.values(byMonth)
                     .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
                     .slice(0, 2);
 
-                // Sort days within each month descending
                 sortedMonths.forEach((m) => {
                     m.days.sort((a, b) => new Date(b.date) - new Date(a.date));
                 });
 
                 setData(sortedMonths);
 
-                // Auto-open the most recent month
                 if (sortedMonths.length > 0) {
                     setOpenMonths({ [sortedMonths[0].monthKey]: true });
                 }
@@ -100,7 +93,11 @@ export default function UserAttendancePage() {
     const getMonthTotal = (days = []) =>
         days.reduce((acc, d) => acc + getDailyTotal(d.sessions), 0);
 
-    const totalAllHours = data.reduce((acc, m) => acc + getMonthTotal(m.days), 0);
+    // ── Current month hours only ──────────────────────────────
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    const currentMonthData = data.find((m) => m.monthKey === currentMonthKey);
+    const currentMonthHours = currentMonthData ? getMonthTotal(currentMonthData.days) : 0;
+    const currentMonthLabel = new Date().toLocaleString("en-IN", { month: "long" });
 
     const toggleMonth = (key) =>
         setOpenMonths((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -120,14 +117,14 @@ export default function UserAttendancePage() {
                     <p className="text-sm text-gray-400 mt-1">Last 2 months</p>
                 </div>
 
-                {/* TOTAL HOURS CARD */}
+                {/* CURRENT MONTH HOURS CARD */}
                 <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
                     <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wider font-medium">
-                            Total Hours
+                            {currentMonthLabel} Hours
                         </p>
                         <p className="text-3xl font-black text-gray-900 mt-0.5">
-                            {formatHours(totalAllHours)}
+                            {formatHours(currentMonthHours)}
                         </p>
                     </div>
                     <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-xl">
@@ -155,7 +152,7 @@ export default function UserAttendancePage() {
                                 key={month.monthKey}
                                 className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden"
                             >
-                                {/* MONTH HEADER — clickable */}
+                                {/* MONTH HEADER */}
                                 <button
                                     onClick={() => toggleMonth(month.monthKey)}
                                     className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
@@ -187,58 +184,52 @@ export default function UserAttendancePage() {
                                     <div className="border-t border-gray-50 divide-y divide-gray-50">
                                         {month.days.map((day) => {
                                             const dayKey = day.date;
-                                            const isDayOpen = !!openDays[dayKey];
                                             const dailyTotal = getDailyTotal(day.sessions);
 
                                             return (
                                                 <div key={dayKey}>
-                                                    {/* DAY ROW — clickable */}
-                                                    <button
-                                                        onClick={() => toggleDay(dayKey)}
-                                                        className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/80 transition-colors"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-xs font-semibold text-gray-500 w-24 text-left">
+                                                    {/* DAY ROW */}
+                                                    <div className="px-5 py-3">
+                                                        {/* Day label + daily total */}
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-xs font-semibold text-gray-500">
                                                                 {formatDayLabel(day.date)}
                                                             </span>
-
+                                                            <span className="text-xs font-semibold text-gray-400">
+                                                                {formatHours(dailyTotal)}
+                                                            </span>
                                                         </div>
 
-                                                        <div className="flex items-center gap-2">
-
-                                                            <div className="px-5 pb-3 flex flex-col gap-4">
-                                                                {day.sessions.map((s, i) => (
-                                                                    <div
-                                                                        key={i}
-                                                                        className="gap-2 flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5"
-                                                                    >
-                                                                        <div className="flex items-center gap-1.5 text-sm">
-                                                                            <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-                                                                            <span className="font-semibold text-gray-800">
-                                                                                {formatTime(s.entryTime)}
-                                                                            </span>
-                                                                            <span className="text-gray-300 mx-1">→</span>
-                                                                            <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
-                                                                            <span className="font-semibold text-gray-800">
-                                                                                {formatTime(s.exitTime)}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${s.totalHours
-                                                                            ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
-                                                                            : "text-amber-600 bg-amber-50 border border-amber-100"
-                                                                            }`}>
-                                                                            {s.totalHours ? formatHours(s.totalHours) : "In progress"}
+                                                        {/* SESSIONS */}
+                                                        <div className="flex flex-col gap-2">
+                                                            {day.sessions.map((s, i) => (
+                                                                <div
+                                                                    key={i}
+                                                                    className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5"
+                                                                >
+                                                                    <div className="flex items-center gap-1.5 text-sm">
+                                                                        <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                                                                        <span className="font-semibold text-gray-800">
+                                                                            {formatTime(s.entryTime)}
+                                                                        </span>
+                                                                        <span className="text-gray-300 mx-1">→</span>
+                                                                        <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
+                                                                        <span className="font-semibold text-gray-800">
+                                                                            {formatTime(s.exitTime)}
                                                                         </span>
                                                                     </div>
-                                                                ))}
-                                                            </div>
 
+                                                                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                                                        s.totalHours
+                                                                            ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
+                                                                            : "text-amber-600 bg-amber-50 border border-amber-100"
+                                                                    }`}>
+                                                                        {s.totalHours ? formatHours(s.totalHours) : "In progress"}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    </button>
-
-                                                    {/* SESSIONS */}
-
+                                                    </div>
                                                 </div>
                                             );
                                         })}

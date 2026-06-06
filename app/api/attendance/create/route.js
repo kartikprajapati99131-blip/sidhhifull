@@ -13,32 +13,68 @@ const OFFICE = {
 // ✅ Tightened to 50 meters — covers building, not the street outside
 const ALLOWED_RADIUS = 50;
 
+// ─────────────────────────────────────────────
+// GET — fetch today's (or all) records, always fresh (no cache)
+// ─────────────────────────────────────────────
+export async function GET(req) {
+  await connectDb();
+
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const all = searchParams.get("all") === "true"; // ?all=true → full history
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const query = { userId: session.user.id };
+  if (!all) query.date = today;
+
+  const records = await Attendance.find(query).sort({ date: -1, entryTime: -1 });
+
+  return Response.json(
+    { records },
+    {
+      headers: {
+        // ✅ Prevent browser/CDN caching — always serves fresh data
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+      },
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// POST — record entry or exit
+// ─────────────────────────────────────────────
 export async function POST(req) {
   await connectDb();
 
   const session = await getServerSession(authOptions);
-
   if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ❌ Block attendance on Sundays
+  const dayOfWeek = new Date().getDay(); // 0 = Sunday
+  if (dayOfWeek === 0) {
+    return Response.json(
+      { error: "Attendance is not recorded on Sundays" },
+      { status: 400 }
+    );
   }
 
   const body = await req.json();
 
   // ✅ Validate lat/lng are present in request
   if (body.lat == null || body.lng == null) {
-    return Response.json(
-      { error: "Location not provided" },
-      { status: 400 }
-    );
+    return Response.json({ error: "Location not provided" }, { status: 400 });
   }
 
   // ✅ Distance Check
-  const distance = getDistance(
-    body.lat,
-    body.lng,
-    OFFICE.lat,
-    OFFICE.lng
-  );
+  const distance = getDistance(body.lat, body.lng, OFFICE.lat, OFFICE.lng);
 
   if (distance > ALLOWED_RADIUS) {
     return Response.json(
@@ -77,7 +113,10 @@ export async function POST(req) {
       },
     });
 
-    return Response.json({ message: "Entry recorded ✅" });
+    return Response.json(
+      { message: "Entry recorded ✅", record },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   // 🔴 EXIT
@@ -108,10 +147,14 @@ export async function POST(req) {
 
     await record.save();
 
-    return Response.json({
-      message: "Exit recorded ✅",
-      totalHours: hours.toFixed(2),
-    });
+    return Response.json(
+      {
+        message: "Exit recorded ✅",
+        totalHours: hours.toFixed(2),
+        record,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   return Response.json({ error: "Invalid type" }, { status: 400 });

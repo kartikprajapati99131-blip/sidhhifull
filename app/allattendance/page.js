@@ -28,6 +28,16 @@ function toDateStr(raw) {
   return null;
 }
 
+// ── NEW: format total hours from ms ──────────────────────────
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return null;
+  const totalMins = Math.floor(ms / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 export default function AdminAttendance() {
   const [data, setData] = useState([]);
   const [search, setSearch] = useState("");
@@ -41,8 +51,7 @@ export default function AdminAttendance() {
 
   const todayStr = new Date().toISOString().split("T")[0];
 
-  // Group by userId
-  // hasRecordToday = true if ANY record for this user has today's date
+  // ── UPDATED grouping: track today's record for hours + exit ──
   const grouped = data.reduce((acc, item) => {
     const rawDate =
       item.date ??
@@ -58,12 +67,14 @@ export default function AdminAttendance() {
     if (!acc[item.userId]) {
       acc[item.userId] = {
         userName: item.userName,
-        hasRecordToday: isToday, // ✅ true only if this record is from today
+        hasRecordToday: isToday,
+        todayRecord: isToday ? item : null,
       };
     } else {
-      // If ANY record for this user is from today, mark present
       if (isToday) {
         acc[item.userId].hasRecordToday = true;
+        // prefer the latest today record
+        acc[item.userId].todayRecord = item;
       }
     }
     return acc;
@@ -175,10 +186,50 @@ export default function AdminAttendance() {
           entries.map(([userId, user], i) => {
             const name = user.userName || "User";
             const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+            const rec = user.todayRecord;
 
-            // ✅ Present = has ANY record dated today
-            // ❌ Absent = no record today (even if they have old records running)
+            // ── Status logic ──────────────────────────────────────
+            // "Leave" = checked in today AND has an exit timestamp
+            const exitRaw =
+              rec?.exitTime ?? rec?.checkOut ?? rec?.endTime ?? rec?.exit ?? null;
+            const hasExited = !!exitRaw;
             const isPresent = user.hasRecordToday;
+
+            // ── Total hours calculation ───────────────────────────
+            const checkInRaw =
+              rec?.checkIn ?? rec?.startTime ?? rec?.timestamp ?? rec?.createdAt ?? null;
+            let totalHoursLabel = "—";
+            if (checkInRaw && exitRaw) {
+              const ms = new Date(exitRaw) - new Date(checkInRaw);
+              totalHoursLabel = formatDuration(ms) ?? "—";
+            } else if (checkInRaw && isPresent) {
+              // still clocked in — show elapsed time
+              const ms = Date.now() - new Date(checkInRaw);
+              const live = formatDuration(ms);
+              totalHoursLabel = live ? `${live} (live)` : "—";
+            }
+
+            // ── Badge ─────────────────────────────────────────────
+            let badge;
+            if (!isPresent) {
+              badge = (
+                <span className="text-xs font-medium bg-red-50 text-red-500 border border-red-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                  Absent
+                </span>
+              );
+            } else if (hasExited) {
+              badge = (
+                <span className="text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                  Leave
+                </span>
+              );
+            } else {
+              badge = (
+                <span className="text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                  Present
+                </span>
+              );
+            }
 
             return (
               <div
@@ -198,22 +249,16 @@ export default function AdminAttendance() {
                   {getInitials(name)}
                 </div>
 
-                {/* Name + ID */}
+                {/* Name + Total Hours */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
-                  <p className="text-xs text-gray-400">ID: {userId}</p>
+                  <p className="text-xs text-gray-400">
+                    {isPresent ? `⏱ ${totalHoursLabel}` : "No record today"}
+                  </p>
                 </div>
 
-                {/* Present / Absent badge */}
-                {isPresent ? (
-                  <span className="text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex-shrink-0">
-                    Present
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium bg-red-50 text-red-500 border border-red-100 px-2 py-0.5 rounded-full flex-shrink-0">
-                    Absent
-                  </span>
-                )}
+                {/* Badge */}
+                {badge}
 
                 {/* Arrow */}
                 <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
