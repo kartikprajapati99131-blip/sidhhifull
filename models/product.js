@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 const variantSchema = new mongoose.Schema(
   {
     label: { type: String, required: true }, // e.g. "18mm", '4 inch', 'Pel Dhar'
-    price: { type: Number, required: true },
     unit:  { type: String },                 // e.g. "sqft", "piece", "sheet"
     stock: { type: Number, default: 0 },
   },
@@ -15,7 +14,7 @@ const imageSchema = new mongoose.Schema(
   {
     url:       { type: String, required: true },
 
-    // ✅ FIX: public_id is no longer required so legacy docs
+    // public_id is not required so legacy docs
     // and Cloudinary uploads without public_id still work
     public_id: { type: String, default: "" },
   },
@@ -25,10 +24,6 @@ const imageSchema = new mongoose.Schema(
 const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-
-    // Base price (used when no variants exist)
-    price:     { type: Number },
-    priceUnit: { type: String }, // e.g. "sqft" for wood
 
     description: { type: String, default: "" },
 
@@ -49,7 +44,6 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ── NEW FIELDS ─────────────────────────────────────────────
     brand: {
       type: String,
       default: "",
@@ -86,7 +80,7 @@ const productSchema = new mongoose.Schema(
   {
     timestamps: true,
 
-    // ✅ Ensure images is always an array
+    // Ensure images is always an array
     toJSON: {
       transform(doc, ret) {
         if (!Array.isArray(ret.images)) {

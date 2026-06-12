@@ -10,17 +10,19 @@ import { notFound } from "next/navigation";
 
 const MAX_IMAGES = 6;
 
+// mode: "variants" → product has size/option list (no price)
+// mode: "simple"   → product has no size/option list
 const TYPE_VARIANT_CONFIG = {
-  Plywood:          { mode: "variants",  unit: "sqft",  presets: ["6mm","12mm","18mm","19mm","25mm"],                              placeholder: "e.g. 18mm"      },
-  Wood:             { mode: "basePrice", unit: "sqft",  presets: [],                                                               placeholder: "Price per sqft"  },
-  Handle:           { mode: "variants",  unit: "piece", presets: ["3 inch","4 inch","6 inch","8 inch","10 inch","12 inch"],         placeholder: "e.g. 4 inch"    },
-  Glass:            { mode: "variants",  unit: "sqft",  presets: ["Pel Dhar","Clear","Frosted","Tinted","Reflective","Tempered"],   placeholder: "e.g. Pel Dhar"  },
-  Laminate:         { mode: "basePrice", unit: "sheet", presets: [],                                                               placeholder: "Price per sheet" },
-  UPVC:             { mode: "basePrice", unit: "piece", presets: [],                                                               placeholder: "Price"           },
-  Hardware:         { mode: "basePrice", unit: "piece", presets: [],                                                               placeholder: "Price"           },
-  AluminiumSection: { mode: "variants",  unit: "piece", presets: ["1 inch","1.5 inch","2 inch","3 inch"],                          placeholder: "e.g. 2 inch"    },
-  Lock:             { mode: "basePrice", unit: "piece", presets: [],                                                               placeholder: "Price"           },
-  Hinges:           { mode: "variants",  unit: "piece", presets: ["2 inch","3 inch","4 inch","5 inch"],                            placeholder: "e.g. 3 inch"    },
+  Plywood:          { mode: "variants", unit: "sqft",  presets: ["6mm","12mm","18mm","19mm","25mm"],                              placeholder: "e.g. 18mm"      },
+  Wood:             { mode: "simple",   unit: "sqft",  presets: [],                                                               placeholder: ""                },
+  Handle:           { mode: "variants", unit: "piece", presets: ["3 inch","4 inch","6 inch","8 inch","10 inch","12 inch"],         placeholder: "e.g. 4 inch"    },
+  Glass:            { mode: "variants", unit: "sqft",  presets: ["Pel Dhar","Clear","Frosted","Tinted","Reflective","Tempered"],   placeholder: "e.g. Pel Dhar"  },
+  Laminate:         { mode: "simple",   unit: "sheet", presets: [],                                                               placeholder: ""                },
+  UPVC:             { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
+  Hardware:         { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
+  AluminiumSection: { mode: "variants", unit: "piece", presets: ["1 inch","1.5 inch","2 inch","3 inch"],                          placeholder: "e.g. 2 inch"    },
+  Lock:             { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
+  Hinges:           { mode: "variants", unit: "piece", presets: ["2 inch","3 inch","4 inch","5 inch"],                            placeholder: "e.g. 3 inch"    },
 };
 
 const TYPE_LABELS = {
@@ -44,7 +46,7 @@ const TAG_COLORS = {
 };
 
 const EMPTY_FORM = {
-  name: "", price: "", priceUnit: "", type: "",
+  name: "", type: "",
   description: "", images: [], variants: [], tags: [],
   brand: "", subCategory: "",
 };
@@ -82,12 +84,10 @@ export default function AddProduct() {
 
   // ─── Type change ────────────────────────────────────────────────────────────
   const handleTypeChange = (e) => {
-    const type   = e.target.value;
-    const config = TYPE_VARIANT_CONFIG[type] || null;
+    const type = e.target.value;
     setForm((prev) => ({
       ...prev, type,
-      variants: [], price: "",
-      priceUnit: config?.unit || "",
+      variants: [],
       brand: "", subCategory: "",
     }));
   };
@@ -105,7 +105,7 @@ export default function AddProduct() {
   const addVariant = (presetLabel = "") =>
     setForm((prev) => ({
       ...prev,
-      variants: [...prev.variants, { label: presetLabel, price: "", unit: typeConfig?.unit || "" }],
+      variants: [...prev.variants, { label: presetLabel, unit: typeConfig?.unit || "" }],
     }));
 
   const addPreset = (label) => {
@@ -158,17 +158,12 @@ export default function AddProduct() {
     const payload = { ...form };
 
     if (isVariantMode) {
-      delete payload.price;
-      delete payload.priceUnit;
-      if (payload.variants.length === 0) { toast.error("Add at least one size/variant with a price."); return; }
+      if (payload.variants.length === 0) { toast.error("Add at least one size/option."); return; }
       for (const v of payload.variants) {
-        if (!v.label || !v.price) { toast.error("Each variant needs a label and price."); return; }
-        v.price = parseFloat(v.price);
+        if (!v.label) { toast.error("Each size/option needs a label."); return; }
       }
     } else {
       delete payload.variants;
-      if (!payload.price) { toast.error("Please enter a price."); return; }
-      payload.price = parseFloat(payload.price);
     }
 
     setSubmitting(true);
@@ -300,28 +295,7 @@ export default function AddProduct() {
             />
           </div>
 
-          {/* ── Base price ── */}
-          {typeConfig && !isVariantMode && (
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Price (per {typeConfig.unit}) *
-              </label>
-              <div className="flex gap-2">
-                <input
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  placeholder={typeConfig.placeholder}
-                  type="number" min="0"
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-                <span className="flex items-center px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
-                  / {typeConfig.unit}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* ── Variants ── */}
+          {/* ── Variants (size / option list) ── */}
           {typeConfig && isVariantMode && (
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-2">Sizes / Options *</label>
@@ -349,8 +323,8 @@ export default function AddProduct() {
 
               {form.variants.length > 0 && (
                 <div className="grid grid-cols-12 gap-2 px-1 mb-1">
-                  {["Label", "Price (₹)", "Unit", ""].map((h, i) => (
-                    <p key={i} className={`text-xs text-gray-400 font-medium ${i === 3 ? "col-span-1" : "col-span-4"}`}>{h}</p>
+                  {["Label", "Unit", ""].map((h, i) => (
+                    <p key={i} className={`text-xs text-gray-400 font-medium ${i === 2 ? "col-span-1" : i === 0 ? "col-span-8" : "col-span-3"}`}>{h}</p>
                   ))}
                 </div>
               )}
@@ -362,15 +336,9 @@ export default function AddProduct() {
                       value={v.label}
                       onChange={(e) => updateVariant(i, "label", e.target.value)}
                       placeholder={typeConfig.placeholder}
-                      className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className="col-span-8 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
-                    <input
-                      value={v.price}
-                      onChange={(e) => updateVariant(i, "price", e.target.value)}
-                      placeholder="0" type="number" min="0"
-                      className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
-                    <span className="col-span-3 text-xs text-gray-400 px-1">/ {v.unit || typeConfig.unit}</span>
+                    <span className="col-span-3 text-xs text-gray-400 px-1">{v.unit || typeConfig.unit}</span>
                     <button
                       type="button" onClick={() => removeVariant(i)}
                       className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-600 transition text-base"

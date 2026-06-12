@@ -140,24 +140,12 @@ export default function ProductClient({ product }) {
 
   const selectedImage = images[selectedIndex] || "";
 
-  const priceDisplay = hasVariants
-    ? selectedVariant
-      ? { amount: selectedVariant.price, unit: selectedVariant.unit }
-      : null
-    : product.price != null
-      ? { amount: product.price, unit: product.priceUnit || null }
-      : null;
-
   const typeLabel = TYPE_LABEL[product.type] || product.type;
   const typeColorClass = TYPE_COLORS[product.type] || "bg-gray-50 text-gray-700 border-gray-200";
 
   const handleWhatsAppEnquiry = () => {
     const pageUrl =
       typeof window !== "undefined" ? window.location.href : "";
-
-    const priceText = priceDisplay
-      ? `₹${priceDisplay.amount}${priceDisplay.unit ? ` / ${priceDisplay.unit}` : ""}`
-      : "Contact for price";
 
     const message = [
       `Hi! I'm interested in the following product:`,
@@ -167,7 +155,7 @@ export default function ProductClient({ product }) {
       hasVariants && selectedVariant
         ? `📐 Size / Option: ${selectedVariant.label}`
         : null,
-      `💰 Price: ${priceText}`,
+      `💰 Price: Please share the price`,
       product.description ? `📝 Description: ${product.description}` : null,
       ``,
       pageUrl ? `🔗 Product Link: ${pageUrl}` : null,
@@ -516,27 +504,11 @@ export default function ProductClient({ product }) {
               {product.name}
             </h1>
 
-
-
             {/* Price */}
             <div className="flex items-baseline gap-3 py-2 animate-fade-in-up delay-200">
-              {priceDisplay ? (
-                <>
-                  <span className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight">
-                    ₹{priceDisplay.amount?.toLocaleString("en-IN")}
-                  </span>
-                  {priceDisplay.unit && (
-                    <span className="text-gray-400 text-lg font-medium">
-                      / {priceDisplay.unit}
-                    </span>
-                  )}
-
-                </>
-              ) : (
-                <span className="text-gray-400 text-xl font-medium">
-                  Contact for price
-                </span>
-              )}
+              <span className="text-gray-400 text-xl font-medium">
+                Contact for price
+              </span>
             </div>
 
             <div className="h-px bg-gray-200 animate-fade-in-up delay-200" />
@@ -565,9 +537,6 @@ export default function ProductClient({ product }) {
                           }`}
                       >
                         <span className="font-semibold">{v.label}</span>
-                        <span className="ml-2 text-xs text-gray-500">
-                          ₹{v.price?.toLocaleString("en-IN")}
-                        </span>
                         {isSelected && (
                           <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center animate-scale-in">
                             <svg

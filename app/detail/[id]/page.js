@@ -34,18 +34,9 @@ export async function generateMetadata({ params }) {
 
     const typeLabel = TYPE_LABEL[product.type] || product.type || "";
 
-    const hasVariants =
-      Array.isArray(product.variants) && product.variants.length > 0;
-    const priceStr = hasVariants
-      ? `from ₹${Math.min(...product.variants.map((v) => v.price))}`
-      : product.price != null
-      ? `₹${product.price}`
-      : null;
-
     const title = `${product.name} — ${typeLabel} | SIDDHI Palanpur`;
     const description = [
       product.description,
-      priceStr ? `Price: ${priceStr}.` : null,
       `Buy ${product.name} from SIDDHI, Palanpur's trusted interior supplier.`,
     ]
       .filter(Boolean)

@@ -24,18 +24,15 @@ const TAG_COLORS = {
   new_arrival: "bg-green-50 text-green-700 border-green-200",
 };
 
-const EMPTY_VARIANT = { label: "", price: "", unit: "", stock: 0 };
+const EMPTY_VARIANT = { label: "", unit: "", stock: 0 };
 
-// ✅ FIX: EMPTY_FORM now uses `images: []` (array) not `image: null` (legacy)
 const EMPTY_FORM = {
   name: "",
-  price: "",
-  priceUnit: "",
   type: "",
   description: "",
   variants: [],
   tags: [],
-  images: [],  // ← was `image: null`
+  images: [],
 };
 
 const MAX_IMAGES = 6;
@@ -72,30 +69,18 @@ export default function ProductsPage() {
       toast.error("Name and category are required.");
       return;
     }
-    const hasBasePrice = form.price !== "" && form.price !== null;
-    const hasVariants  = form.variants.length > 0;
-    if (!hasBasePrice && !hasVariants) {
-      toast.error("Add a base price or at least one variant.");
-      return;
-    }
-    const badVariant = form.variants.find((v) => !v.label || v.price === "");
+    const badVariant = form.variants.find((v) => !v.label);
     if (badVariant) {
-      toast.error("Each variant needs a label and price.");
+      toast.error("Each variant needs a label.");
       return;
     }
 
     setUpdating(true);
     try {
-      // ✅ FIX: payload uses `images` array, not the legacy `image` field.
-      // We omit `image` entirely so the old field is never sent, preventing
-      // it from overwriting the `images` array in MongoDB.
-      const { image, ...formWithoutLegacy } = form; // strip legacy field if present
       const payload = {
-        ...formWithoutLegacy,
-        price:    form.price === "" ? undefined : Number(form.price),
+        ...form,
         variants: form.variants.map((v) => ({
           ...v,
-          price: Number(v.price),
           stock: Number(v.stock) || 0,
         })),
       };
@@ -137,7 +122,6 @@ export default function ProductsPage() {
     });
   };
 
-  // ✅ FIX: handleUpload appends to `images` array instead of setting `image`
   const handleUpload = (result) => {
     if (result.info && typeof result.info !== "string") {
       setForm((prev) => {
@@ -195,8 +179,6 @@ export default function ProductsPage() {
 
   const openEdit = (p) => {
     setEditItem(p);
-    // ✅ FIX: openEdit now maps `p.images` (array) with fallback to legacy
-    // `p.image` so old single-image products still show their image in the editor.
     let images = [];
     if (Array.isArray(p.images) && p.images.length > 0) {
       images = p.images.map((img) =>
@@ -210,13 +192,15 @@ export default function ProductsPage() {
 
     setForm({
       name:        p.name        ?? "",
-      price:       p.price       ?? "",
-      priceUnit:   p.priceUnit   ?? "",
       type:        p.type        ?? "",
       description: p.description ?? "",
-      variants:    (p.variants   ?? []).map((v) => ({ ...v })),
+      variants:    (p.variants   ?? []).map((v) => ({
+        label: v.label ?? "",
+        unit:  v.unit  ?? "",
+        stock: v.stock ?? 0,
+      })),
       tags:        p.tags        ?? [],
-      images,      // ✅ always an array of {url, public_id}
+      images,      // always an array of {url, public_id}
     });
     setTimeout(() => {
       document.getElementById("edit-panel")?.scrollIntoView({ behavior: "smooth" });
@@ -316,31 +300,6 @@ export default function ProductsPage() {
                   </select>
                 </div>
 
-                {/* Base price row */}
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Base Price (₹)</label>
-                    <input
-                      value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
-                      placeholder="e.g. 1200"
-                      type="number"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
-                  </div>
-                  <div className="w-32">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
-                    <select
-                      value={form.priceUnit}
-                      onChange={(e) => setForm({ ...form, priceUnit: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    >
-                      <option value="">—</option>
-                      {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
                   <textarea
@@ -354,7 +313,6 @@ export default function ProductsPage() {
               </div>
 
               {/* ── Image gallery ── */}
-              {/* ✅ FIX: Full multi-image gallery editor (same as addproduct) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div>
@@ -430,26 +388,26 @@ export default function ProductsPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <p className="text-xs font-medium text-gray-500">Variants</p>
-                    <p className="text-xs text-gray-400">Size / spec options with individual prices (e.g. 18mm, 4 inch)</p>
+                    <p className="text-xs font-medium text-gray-500">Sizes / Options</p>
+                    <p className="text-xs text-gray-400">Optional size / spec options (e.g. 18mm, 4 inch)</p>
                   </div>
                   <button
                     onClick={addVariant}
                     className="px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition"
                   >
-                    + Add Variant
+                    + Add Option
                   </button>
                 </div>
 
                 {form.variants.length === 0 ? (
                   <div className="text-center py-5 rounded-xl border border-dashed border-gray-200 text-gray-400 text-xs">
-                    No variants — base price will be used
+                    No size/options added
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     <div className="grid grid-cols-12 gap-2 px-1">
-                      {["Label *", "Price (₹) *", "Unit", "Stock", ""].map((h, i) => (
-                        <p key={i} className={`text-xs text-gray-400 font-medium ${i === 4 ? "col-span-1" : i === 3 ? "col-span-2" : "col-span-3"}`}>{h}</p>
+                      {["Label *", "Unit", "Stock", ""].map((h, i) => (
+                        <p key={i} className={`text-xs text-gray-400 font-medium ${i === 3 ? "col-span-1" : i === 0 ? "col-span-5" : "col-span-3"}`}>{h}</p>
                       ))}
                     </div>
 
@@ -459,14 +417,7 @@ export default function ProductsPage() {
                           value={v.label}
                           onChange={(e) => updateVariant(i, "label", e.target.value)}
                           placeholder="e.g. 18mm"
-                          className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                        />
-                        <input
-                          value={v.price}
-                          onChange={(e) => updateVariant(i, "price", e.target.value)}
-                          placeholder="0"
-                          type="number"
-                          className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                          className="col-span-5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
                         />
                         <select
                           value={v.unit}
@@ -481,7 +432,7 @@ export default function ProductsPage() {
                           onChange={(e) => updateVariant(i, "stock", e.target.value)}
                           placeholder="0"
                           type="number"
-                          className="col-span-2 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                          className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
                         />
                         <button
                           onClick={() => removeVariant(i)}
@@ -553,7 +504,6 @@ export default function ProductsPage() {
           <div className="flex flex-col gap-3">
             {products.map((p) => {
               const hasVariants = p.variants?.length > 0;
-              // ✅ FIX: Product list thumbnail uses images[0] with fallback to legacy image
               const thumbUrl = p.images?.[0]?.url ?? p.image?.url ?? null;
               return (
                 <div
@@ -592,18 +542,14 @@ export default function ProductsPage() {
                         ))}
                       </div>
 
-                      {hasVariants ? (
+                      {hasVariants && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {p.variants.map((v, i) => (
                             <span key={i} className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full">
-                              {v.label} — ₹{v.price}{v.unit ? `/${v.unit}` : ""}
+                              {v.label}{v.unit ? ` (${v.unit})` : ""}
                             </span>
                           ))}
                         </div>
-                      ) : (
-                        <p className="text-blue-600 font-medium text-sm mt-0.5">
-                          ₹ {p.price}{p.priceUnit ? ` / ${p.priceUnit}` : ""}
-                        </p>
                       )}
 
                       {p.description && (
