@@ -55,7 +55,7 @@ export default function Navbar() {
         <Link href="/" className="flex items-center shrink-0">
           <Image
             src="/s-black.svg"
-            alt="Siddhi Interiors"
+            alt="Siddhi Glass & Plywoods"
             width={130} height={104}
             priority
             className="h-8 w-auto"
