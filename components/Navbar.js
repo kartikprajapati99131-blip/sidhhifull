@@ -210,7 +210,7 @@ export default function Navbar() {
                 </div>
               )}
 
-              {isAccounts && (
+              {isSales && (
                 <div className="relative">
                   <button
                     onClick={() => setStaffOpen((v) => !v)}
