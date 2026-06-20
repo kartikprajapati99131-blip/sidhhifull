@@ -35,6 +35,10 @@ const CustomerSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    birthDate: {
+      type: Date,
+      default: null,
+    },
     address1: {
       type: String,
       trim: true,
@@ -94,7 +98,10 @@ CustomerSchema.index({ mobile2: 1 });
 CustomerSchema.index({ city: 1 });
 CustomerSchema.index({ bloodGroup: 1 });
 CustomerSchema.index({ religion: 1 });
+// index for birthday queries (month+day)
+CustomerSchema.index({ birthDate: 1 });
+CustomerSchema.index({ createdBy: 1 });
+CustomerSchema.index({ createdAt: 1 });
 
-// ✅ FIXED: use "CustomerData" not "Customer" to avoid conflict with other models
 export default mongoose.models.CustomerData ||
   mongoose.model("CustomerData", CustomerSchema);

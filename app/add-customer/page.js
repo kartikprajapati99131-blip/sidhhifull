@@ -9,13 +9,15 @@ const BLOOD_GROUPS = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const EMPTY_FORM = {
   mobile1: "", mobile2: "", category: "",
   firstName: "", middleName: "", lastName: "",
+  birthDate: "",
   address1: "", address2: "", area: "",
   city: "", district: "", state: "", pincode: "",
   bloodGroup: "", religion: "",
 };
 
 const EMPTY_FILTERS = {
-  search: "", name: "", category: "", bloodGroup: "", religion: "", city: "",
+  search: "", name: "", category: "", bloodGroup: "",
+  religion: "", city: "", addedBy: "", dateFrom: "", dateTo: "",
 };
 
 const SUGGESTIONS = {
@@ -37,6 +39,12 @@ function filtersToQS(f, extra = {}) {
   return p.toString();
 }
 
+const fmtDate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+};
+
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const inputCls =
   "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white " +
@@ -46,6 +54,12 @@ const inputCls =
 const popupInputCls =
   "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white " +
   "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent uppercase transition";
+
+// date input doesn't need uppercase
+const dateInputCls =
+  "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white " +
+  "focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent " +
+  "placeholder:text-slate-300 transition";
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 function Spinner({ size = 16 }) {
@@ -190,13 +204,17 @@ function EField({ label, field, type = "text", maxLen, draft, setD, setDCap, isA
             <CategorySelect value={draft.category || ""} onChange={v => setD("category", v)}
               isAdmin={isAdmin} categories={categories} onCategoryAdded={onCategoryAdded} />
           </div>
+        ) : type === "date" ? (
+          <input type="date" value={draft[field] ? draft[field].slice(0, 10) : ""}
+            onChange={e => setD(field, e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 transition" />
         ) : (
           <input type={type} inputMode={type === "tel" ? "numeric" : undefined}
             maxLength={maxLen} value={draft[field] || ""}
             onChange={e => setDCap(field, e.target.value)} className={popupInputCls} />
         )}
       </div>
-      {type !== "select-blood" && type !== "select-category" && SUGGESTIONS[field] && (
+      {type !== "select-blood" && type !== "select-category" && type !== "date" && SUGGESTIONS[field] && (
         <div className="ml-28 pl-2 mt-1">
           <SuggestionChips field={field} value={draft[field] || ""} onSelect={v => setD(field, v)} />
         </div>
@@ -231,10 +249,12 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
     if (!draft.firstName?.trim()) { setSaveError("First name is required."); return; }
     if (!draft.lastName?.trim()) { setSaveError("Last name is required."); return; }
     setSaving(true);
+    const payload = { ...draft };
+    if (!payload.birthDate) payload.birthDate = null;
     const res = await fetch(`/api/customers/${customer._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     setSaving(false);
@@ -252,6 +272,7 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
     { label: "First Name", field: "firstName" },
     { label: "Middle Name", field: "middleName" },
     { label: "Last Name", field: "lastName" },
+    { label: "Birth Date", field: "birthDate", type: "date" },
     { label: "Primary Mobile", field: "mobile1", type: "tel", maxLen: 10 },
     { label: "Secondary Mobile", field: "mobile2", type: "tel", maxLen: 10 },
     { label: "Address 1", field: "address1" },
@@ -300,6 +321,7 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
             <>
               <PopupRow label="Primary Mobile" value={customer.mobile1} />
               <PopupRow label="Secondary Mobile" value={customer.mobile2} />
+              <PopupRow label="Birth Date" value={fmtDate(customer.birthDate)} />
               <PopupRow label="Address 1" value={customer.address1} />
               <PopupRow label="Address 2" value={customer.address2} />
               <PopupRow label="Area" value={customer.area} />
@@ -314,7 +336,10 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
         </div>
 
         <div className="px-6 py-3 bg-slate-50 flex justify-between items-center border-t border-slate-100">
-          <p className="text-xs text-slate-400">Added {new Date(customer.createdAt).toLocaleDateString("en-IN")}</p>
+          <div className="text-xs text-slate-400 space-y-0.5">
+            <p>Added {new Date(customer.createdAt).toLocaleDateString("en-IN")}</p>
+            {customer.createdBy && <p className="text-slate-300">by {customer.createdBy}</p>}
+          </div>
           <div className="flex gap-2">
             {editing ? (
               <>
@@ -353,7 +378,7 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
 }
 
 // ── Customer table ────────────────────────────────────────────────────────────
-function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, onPageChange }) {
+function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, onPageChange, showAddedBy = false }) {
   const totalPages = Math.ceil(total / limit);
   if (!customers.length) {
     return (
@@ -363,6 +388,9 @@ function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, on
       </div>
     );
   }
+
+  const extraCols = showAddedBy ? ["Added By", "Added On"] : [];
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
@@ -374,7 +402,7 @@ function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, on
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-left">
-              {["#", "Name", "Mobile 1", "Mobile 2", "City", "Blood", "Religion", ""].map(h => (
+              {["#", "Name", "Mobile 1", "Mobile 2", "City", "Birth Date", "Blood", "Religion", ...extraCols, ""].map(h => (
                 <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -392,12 +420,19 @@ function CustomerTable({ customers, page, total, limit = 20, isAdmin, onView, on
                 <td className="px-4 py-2.5 text-slate-600">{c.mobile1}</td>
                 <td className="px-4 py-2.5 text-slate-400">{c.mobile2 || "—"}</td>
                 <td className="px-4 py-2.5 text-slate-600 uppercase">{c.city || "—"}</td>
+                <td className="px-4 py-2.5 text-slate-500 text-xs">{fmtDate(c.birthDate) || "—"}</td>
                 <td className="px-4 py-2.5">
                   {c.bloodGroup
                     ? <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold border border-red-200">{c.bloodGroup}</span>
                     : "—"}
                 </td>
                 <td className="px-4 py-2.5 text-slate-600 uppercase">{c.religion || "—"}</td>
+                {showAddedBy && (
+                  <>
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{c.createdBy || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{fmtDate(c.createdAt)}</td>
+                  </>
+                )}
                 <td className="px-4 py-2.5">
                   <button onClick={() => onView(c)}
                     className="px-3 py-1 rounded-lg bg-sky-50 text-sky-600 text-xs font-semibold hover:bg-sky-100 border border-sky-200 transition">
@@ -442,7 +477,7 @@ function FilterPills({ filters, onRemove }) {
 // ── Search Panel ──────────────────────────────────────────────────────────────
 function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [applied, setApplied] = useState(EMPTY_FILTERS); // last-searched state
+  const [applied, setApplied] = useState(EMPTY_FILTERS);
   const [customers, setCustomers] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -466,35 +501,23 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
     setLoading(false);
   }, []);
 
-  // Load all on mount
   useEffect(() => { doSearch(1, EMPTY_FILTERS); }, []);
 
-  function handleSearch() {
-    setApplied(filters);
-    doSearch(1, filters);
-  }
-
-  function handleReset() {
-    setFilters(EMPTY_FILTERS);
-    setApplied(EMPTY_FILTERS);
-    doSearch(1, EMPTY_FILTERS);
-  }
-
+  function handleSearch() { setApplied(filters); doSearch(1, filters); }
+  function handleReset() { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); doSearch(1, EMPTY_FILTERS); }
   function removeFilter(k) {
     const next = { ...applied, [k]: "" };
-    setFilters(next);
-    setApplied(next);
-    doSearch(1, next);
+    setFilters(next); setApplied(next); doSearch(1, next);
   }
-
   function handleUpdated(updated) {
     setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
     setPopup(updated);
   }
 
+  const hasDateFilter = filters.dateFrom || filters.dateTo;
+
   return (
     <div className="space-y-4">
-      {/* Filter card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
@@ -502,7 +525,7 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
           {total > 0 && <span className="ml-auto text-xs font-normal text-slate-400">{total.toLocaleString()} result{total !== 1 ? "s" : ""}</span>}
         </h3>
 
-        {/* Row 1 */}
+        {/* Row 1 — general search + name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
           <input placeholder="Name / Mobile / City…"
             value={filters.search}
@@ -516,8 +539,8 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
             className={inputCls} />
         </div>
 
-        {/* Row 2 */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {/* Row 2 — category / blood / religion / city */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           <select value={filters.category} onChange={e => setF("category", e.target.value)} className={inputCls}>
             <option value="">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -536,6 +559,27 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
             onChange={e => setF("city", cap(e.target.value))}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             className={inputCls} />
+        </div>
+
+        {/* Row 3 — addedBy + date range */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <input placeholder="Added By (email / name)"
+            value={filters.addedBy}
+            onChange={e => setF("addedBy", e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added From</label>
+            <input type="date" value={filters.dateFrom}
+              onChange={e => setF("dateFrom", e.target.value)}
+              className={dateInputCls} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added To</label>
+            <input type="date" value={filters.dateTo}
+              onChange={e => setF("dateTo", e.target.value)}
+              className={dateInputCls} />
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -559,6 +603,7 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
           customers={customers} page={page} total={total} limit={20}
           isAdmin={isAdmin} onView={setPopup}
           onPageChange={p => doSearch(p, applied)}
+          showAddedBy={!!(applied.addedBy || applied.dateFrom || applied.dateTo)}
         />
       )}
 
@@ -571,9 +616,162 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
   );
 }
 
+// ── Birthdays Today ───────────────────────────────────────────────────────────
+function BirthdaysToday({ isAdmin, categories, onCategoryAdded }) {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [popup, setPopup] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        // Fetch all customers with birthDate, then filter by today's month+day on client
+        // (MongoDB doesn't easily query month/day without aggregation)
+        // We fetch in batches — for large DBs consider a dedicated API endpoint
+        const today = new Date();
+        const mm = today.getMonth() + 1;
+        const dd = today.getDate();
+
+        let all = [];
+        let page = 1;
+        let hasMore = true;
+        while (hasMore) {
+          const res = await fetch(`/api/customers?page=${page}&limit=100`);
+          const data = await res.json();
+          all = [...all, ...(data.customers || [])];
+          if (all.length >= data.total || !data.customers?.length) hasMore = false;
+          else page++;
+          // Safety: don't loop more than 50 pages
+          if (page > 50) break;
+        }
+
+        const birthdays = all.filter(c => {
+          if (!c.birthDate) return false;
+          const d = new Date(c.birthDate);
+          return d.getMonth() + 1 === mm && d.getDate() === dd;
+        });
+
+        setCustomers(birthdays);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  function handleUpdated(updated) {
+    setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
+    setPopup(updated);
+  }
+
+  const today = new Date();
+  const todayLabel = today.toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+
+  return (
+    <div className="space-y-4">
+      {/* Header card */}
+      <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl px-6 py-5 text-white shadow-md">
+        <div className="flex items-center gap-3">
+          <span className="text-4xl">🎂</span>
+          <div>
+            <h3 className="font-bold text-xl">Birthdays Today</h3>
+            <p className="text-pink-100 text-sm">{todayLabel}</p>
+          </div>
+          <div className="ml-auto text-right">
+            {loading ? (
+              <Spinner size={24} />
+            ) : (
+              <>
+                <p className="text-3xl font-black">{customers.length}</p>
+                <p className="text-pink-100 text-xs">customer{customers.length !== 1 ? "s" : ""}</p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Spinner size={32} /></div>
+      ) : customers.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl py-16 text-center shadow-sm">
+          <p className="text-5xl mb-3">🎈</p>
+          <p className="text-slate-500 text-sm font-medium">No birthdays today.</p>
+          <p className="text-slate-400 text-xs mt-1">Customers need a birth date saved to appear here.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-pink-50 text-left">
+                  {["#", "Name", "Mobile 1", "Mobile 2", "City", "Blood Group", ""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-xs font-semibold text-pink-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((c, i) => (
+                  <tr key={c._id} className="border-t border-slate-100 hover:bg-pink-50/30 transition">
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap uppercase">
+                      <span className="mr-2">🎂</span>
+                      {c.firstName} {c.middleName} {c.lastName}
+                      {c.category && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-violet-50 text-violet-500 rounded text-xs border border-violet-200 uppercase">{c.category}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">{c.mobile1}</td>
+                    <td className="px-4 py-2.5 text-slate-400">{c.mobile2 || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-600 uppercase">{c.city || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {c.bloodGroup
+                        ? <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold border border-red-200">{c.bloodGroup}</span>
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => setPopup(c)}
+                        className="px-3 py-1 rounded-lg bg-pink-50 text-pink-600 text-xs font-semibold hover:bg-pink-100 border border-pink-200 transition">
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Quick WhatsApp greet button */}
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
+            <p className="text-xs text-slate-400">Send birthday wishes via WhatsApp</p>
+            <div className="flex gap-2 flex-wrap">
+              {customers.map(c => (
+                <a key={c._id}
+                  href={`https://wa.me/91${c.mobile1}?text=${encodeURIComponent(`Happy Birthday ${c.firstName}! 🎂🎉`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="px-3 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-semibold border border-green-200 hover:bg-green-100 transition">
+                  {c.firstName}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {popup && (
+        <CustomerPopup customer={popup} isAdmin={isAdmin} categories={categories}
+          onCategoryAdded={onCategoryAdded} onClose={() => setPopup(null)}
+          onDeleted={() => setCustomers(cs => cs.filter(c => c._id !== popup._id))}
+          onUpdated={handleUpdated} />
+      )}
+    </div>
+  );
+}
+
 // ── Export Bar ────────────────────────────────────────────────────────────────
 function ExportBar({ categories }) {
-  const EXPORT_EMPTY = { category: "", bloodGroup: "", name: "", religion: "", city: "" };
+  const EXPORT_EMPTY = { category: "", bloodGroup: "", name: "", religion: "", city: "", addedBy: "", dateFrom: "", dateTo: "" };
   const [filters, setFilters] = useState(EXPORT_EMPTY);
   const [fields, setFields] = useState("full");
   const [loading, setLoading] = useState(null);
@@ -582,7 +780,6 @@ function ExportBar({ categories }) {
 
   const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
 
-  // Debounced count preview
   const countRef = useRef(null);
   useEffect(() => {
     clearTimeout(countRef.current);
@@ -638,11 +835,27 @@ function ExportBar({ categories }) {
         </div>
 
         {/* Row 2 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <input placeholder="Religion filter" value={filters.religion}
             onChange={e => setF("religion", cap(e.target.value))} className={inputCls} />
           <input placeholder="City filter" value={filters.city}
             onChange={e => setF("city", cap(e.target.value))} className={inputCls} />
+        </div>
+
+        {/* Row 3 — addedBy + date range */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <input placeholder="Added By" value={filters.addedBy}
+            onChange={e => setF("addedBy", e.target.value)} className={inputCls} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added From</label>
+            <input type="date" value={filters.dateFrom}
+              onChange={e => setF("dateFrom", e.target.value)} className={dateInputCls} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added To</label>
+            <input type="date" value={filters.dateTo}
+              onChange={e => setF("dateTo", e.target.value)} className={dateInputCls} />
+          </div>
         </div>
 
         {/* Fields toggle + count */}
@@ -684,10 +897,7 @@ function ExportBar({ categories }) {
       </div>
 
       {hasFilters && (
-        <FilterPills
-          filters={filters}
-          onRemove={k => setF(k, "")}
-        />
+        <FilterPills filters={filters} onRemove={k => setF(k, "")} />
       )}
     </div>
   );
@@ -744,10 +954,13 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
     if (!form.lastName.trim()) { setError("Last name is required."); return; }
 
     setSubmitting(true);
+    const payload = { ...form, createdBy: userEmail || "" };
+    if (!payload.birthDate) payload.birthDate = null;
+
     const res = await fetch("/api/customers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, createdBy: userEmail || "" }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -848,6 +1061,16 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
                     onChange={e => setCap("lastName", e.target.value)} className={inputCls} />
                 </Field>
               </div>
+
+              {/* Birth Date */}
+              <div className="mt-4">
+                <Field label="Birth Date">
+                  <input type="date" value={form.birthDate || ""}
+                    onChange={e => set("birthDate", e.target.value)}
+                    className={dateInputCls} />
+                  <p className="text-xs text-slate-400 mt-1">Used for birthday reminders</p>
+                </Field>
+              </div>
             </div>
 
             {/* Address */}
@@ -935,9 +1158,20 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = {
-  admin: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }, { key: "export", label: "Export" }],
-  accounts: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }],
-  sales: [{ key: "add", label: "Add Customer" }],
+  admin: [
+    { key: "add", label: "Add Customer" },
+    { key: "search", label: "All Customers" },
+    { key: "birthdays", label: "🎂 Birthdays" },
+    { key: "export", label: "Export" },
+  ],
+  accounts: [
+    { key: "add", label: "Add Customer" },
+    { key: "search", label: "All Customers" },
+    { key: "birthdays", label: "🎂 Birthdays" },
+  ],
+  sales: [
+    { key: "add", label: "Add Customer" },
+  ],
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -985,9 +1219,8 @@ export default function AddCustomerPage() {
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isAdmin ? "bg-sky-50 text-sky-600 border-sky-200"
-              : role === "sales" ? "bg-amber-50 text-amber-600 border-amber-200"
-                : "bg-violet-50 text-violet-600 border-violet-200"
-            }`}>
+            : role === "sales" ? "bg-amber-50 text-amber-600 border-amber-200"
+              : "bg-violet-50 text-violet-600 border-violet-200"}`}>
             {isAdmin ? "Admin" : role === "sales" ? "Sales" : "Accounts"}
           </span>
         </div>
@@ -1009,6 +1242,7 @@ export default function AddCustomerPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
         {tab === "add" && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "search" && <SearchPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "birthdays" && <BirthdaysToday isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "export" && isAdmin && <ExportBar categories={categories} />}
       </div>
     </div>

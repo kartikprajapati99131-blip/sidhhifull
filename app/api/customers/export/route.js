@@ -1,24 +1,28 @@
 // app/api/customers/export/route.js
-// GET /api/customers/export?format=csv|excel|pdf&category=&bloodGroup=&religion=&city=&name=&fields=full|namephone
+// GET /api/customers/export?format=csv|excel|pdf&category=&bloodGroup=&religion=&city=&name=&addedBy=&dateFrom=&dateTo=&fields=full|namephone
 //
-// Install dependencies:  npm install xlsx jspdf jspdf-autotable
+// npm install xlsx jspdf jspdf-autotable
 
 import { NextResponse } from "next/server";
 import connectDb from "@/db/connectDb";
 import Customer from "@/models/CustomerData";
 
 async function fetchFiltered(searchParams) {
-  const category   = searchParams.get("category")?.trim()   || "";
-  const bloodGroup = searchParams.get("bloodGroup")?.trim() || "";
-  const religion   = searchParams.get("religion")?.trim()   || "";
-  const city       = searchParams.get("city")?.trim()       || "";
-  const name       = searchParams.get("name")?.trim()       || "";
+  const category   = searchParams.get("category")?.trim()  || "";
+  const bloodGroup = searchParams.get("bloodGroup")?.trim()|| "";
+  const religion   = searchParams.get("religion")?.trim()  || "";
+  const city       = searchParams.get("city")?.trim()      || "";
+  const name       = searchParams.get("name")?.trim()      || "";
+  const addedBy    = searchParams.get("addedBy")?.trim()   || "";
+  const dateFrom   = searchParams.get("dateFrom")?.trim()  || "";
+  const dateTo     = searchParams.get("dateTo")?.trim()    || "";
 
   const query = {};
   if (category)   query.category   = new RegExp(category, "i");
   if (bloodGroup) query.bloodGroup = bloodGroup;
   if (religion)   query.religion   = new RegExp(religion, "i");
   if (city)       query.city       = new RegExp(city, "i");
+  if (addedBy)    query.createdBy  = new RegExp(addedBy, "i");
   if (name) {
     query.$or = [
       { firstName:  new RegExp(name, "i") },
@@ -26,42 +30,57 @@ async function fetchFiltered(searchParams) {
       { lastName:   new RegExp(name, "i") },
     ];
   }
+  if (dateFrom || dateTo) {
+    query.createdAt = {};
+    if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = end;
+    }
+  }
 
   return Customer.find(query).sort({ createdAt: -1 }).lean();
 }
 
-// Merge first, middle, last into one clean string
 const fullName = (c) =>
   [c.firstName, c.middleName, c.lastName].filter(Boolean).join(" ");
+
+const fmtDate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
+};
 
 export async function GET(request) {
   try {
     await connectDb();
 
     const { searchParams } = new URL(request.url);
-    const format = searchParams.get("format") || "csv";   // csv | excel | pdf
-    const fields = searchParams.get("fields") || "full";  // full | namephone
+    const format = searchParams.get("format") || "csv";
+    const fields = searchParams.get("fields") || "full";
 
     const customers = await fetchFiltered(searchParams);
 
-    // ── Build rows ────────────────────────────────────────────────────────────
-    const namePhoneHeaders = ["Sr.No", "Name", "Mobile 1", "Mobile 2"];
+    const namePhoneHeaders = ["Sr.No", "Name", "Mobile 1", "Mobile 2", "Birth Date"];
     const fullHeaders = [
-      "Sr.No", "Name",
+      "Sr.No", "Name", "Birth Date",
       "Address 1", "Address 2", "Area", "City", "District", "State", "Pincode",
       "Blood Group", "Religion", "Mobile 1", "Mobile 2", "Category",
+      "Added By", "Added On",
     ];
 
     const headers = fields === "namephone" ? namePhoneHeaders : fullHeaders;
 
     const rows = customers.map((c, i) => {
       if (fields === "namephone") {
-        return [i + 1, fullName(c), c.mobile1, c.mobile2];
+        return [i + 1, fullName(c), c.mobile1, c.mobile2, fmtDate(c.birthDate)];
       }
       return [
-        i + 1, fullName(c),
+        i + 1, fullName(c), fmtDate(c.birthDate),
         c.address1, c.address2, c.area, c.city, c.district, c.state, c.pincode,
         c.bloodGroup, c.religion, c.mobile1, c.mobile2, c.category,
+        c.createdBy || "", fmtDate(c.createdAt),
       ];
     });
 
@@ -83,7 +102,6 @@ export async function GET(request) {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      // Column widths — Name column wider, rest standard
       ws["!cols"] = headers.map((h) => ({ wch: h === "Name" ? 30 : 18 }));
       XLSX.utils.book_append_sheet(wb, ws, "Customers");
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
@@ -112,9 +130,7 @@ export async function GET(request) {
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [240, 249, 255] },
-        columnStyles: {
-          1: { cellWidth: 40 }, // Name column wider
-        },
+        columnStyles: { 1: { cellWidth: 40 } },
       });
       const pdfBytes = doc.output("arraybuffer");
       return new NextResponse(pdfBytes, {
