@@ -1,5 +1,5 @@
 // app/api/customers/export/route.js
-// GET /api/customers/export?format=csv|excel|pdf&category=&bloodGroup=&religion=&city=&name=&addedBy=&dateFrom=&dateTo=&fields=full|namephone
+// GET /api/customers/export?format=csv|excel|pdf&category=&bloodGroup=&religion=&city=&name=&fields=full|namephone
 //
 // npm install xlsx jspdf jspdf-autotable
 
@@ -13,31 +13,18 @@ async function fetchFiltered(searchParams) {
   const religion   = searchParams.get("religion")?.trim()  || "";
   const city       = searchParams.get("city")?.trim()      || "";
   const name       = searchParams.get("name")?.trim()      || "";
-  const addedBy    = searchParams.get("addedBy")?.trim()   || "";
-  const dateFrom   = searchParams.get("dateFrom")?.trim()  || "";
-  const dateTo     = searchParams.get("dateTo")?.trim()    || "";
 
   const query = {};
   if (category)   query.category   = new RegExp(category, "i");
   if (bloodGroup) query.bloodGroup = bloodGroup;
   if (religion)   query.religion   = new RegExp(religion, "i");
   if (city)       query.city       = new RegExp(city, "i");
-  if (addedBy)    query.createdBy  = new RegExp(addedBy, "i");
   if (name) {
     query.$or = [
       { firstName:  new RegExp(name, "i") },
       { middleName: new RegExp(name, "i") },
       { lastName:   new RegExp(name, "i") },
     ];
-  }
-  if (dateFrom || dateTo) {
-    query.createdAt = {};
-    if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
-    if (dateTo) {
-      const end = new Date(dateTo);
-      end.setHours(23, 59, 59, 999);
-      query.createdAt.$lte = end;
-    }
   }
 
   return Customer.find(query).sort({ createdAt: -1 }).lean();
@@ -67,7 +54,6 @@ export async function GET(request) {
       "Sr.No", "Name", "Birth Date",
       "Address 1", "Address 2", "Area", "City", "District", "State", "Pincode",
       "Blood Group", "Religion", "Mobile 1", "Mobile 2", "Category",
-      "Added By", "Added On",
     ];
 
     const headers = fields === "namephone" ? namePhoneHeaders : fullHeaders;
@@ -80,7 +66,6 @@ export async function GET(request) {
         i + 1, fullName(c), fmtDate(c.birthDate),
         c.address1, c.address2, c.area, c.city, c.district, c.state, c.pincode,
         c.bloodGroup, c.religion, c.mobile1, c.mobile2, c.category,
-        c.createdBy || "", fmtDate(c.createdAt),
       ];
     });
 
