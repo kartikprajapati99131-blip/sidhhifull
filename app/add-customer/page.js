@@ -617,147 +617,215 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
 }
 
 // ── Birthday WhatsApp Footer ──────────────────────────────────────────────────
+const WA_ICON = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+);
+
 function BirthdayWAFooter({ customers }) {
   const [msgTemplate, setMsgTemplate] = useState("Happy Birthday {name}! 🎂🎉 Wishing you a wonderful day!");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState([]); // track which indices opened
-  const [copied, setCopied] = useState(false);
   const [showCustomise, setShowCustomise] = useState(false);
-  const [currentIdx, setCurrentIdx] = useState(null);
+  const [copied, setCopied] = useState(false);
+  // Step-through sender state
+  const [senderOpen, setSenderOpen] = useState(false);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [sentSet, setSentSet] = useState(new Set());
 
   function buildMsg(c) {
-    return msgTemplate.replace("{name}", c.firstName);
+    return msgTemplate.replace(/\{name\}/gi, c.firstName);
   }
 
-  // Open all tabs one by one with 600ms delay to avoid popup blocker
-  async function handleSendAll() {
-    setSending(true);
-    setSent([]);
-    for (let i = 0; i < customers.length; i++) {
-      const c = customers[i];
-      const url = `https://wa.me/91${c.mobile1}?text=${encodeURIComponent(buildMsg(c))}`;
-      window.open(url, "_blank");
-      setCurrentIdx(i);
-      setSent(prev => [...prev, i]);
-      // Delay between tabs — browsers block rapid opens
-      if (i < customers.length - 1) {
-        await new Promise(r => setTimeout(r, 700));
-      }
-    }
-    setCurrentIdx(null);
-    setSending(false);
+  function startSender() {
+    setStepIdx(0);
+    setSentSet(new Set());
+    setSenderOpen(true);
   }
 
-  function handleCopyNumbers() {
-    const text = customers.map(c => `${c.firstName} ${c.lastName}: ${c.mobile1}`).join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  function openCurrent() {
+    const c = customers[stepIdx];
+    const url = `https://wa.me/91${c.mobile1}?text=${encodeURIComponent(buildMsg(c))}`;
+    window.open(url, "_blank", "noopener");
+    setSentSet(prev => new Set([...prev, stepIdx]));
   }
 
-  function handleCopyMessages() {
-    const text = customers
-      .map(c => `${c.mobile1}\n${buildMsg(c)}`)
-      .join("\n\n");
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  function goNext() {
+    if (stepIdx < customers.length - 1) setStepIdx(i => i + 1);
+    else setSenderOpen(false);
+  }
+
+  function goPrev() {
+    if (stepIdx > 0) setStepIdx(i => i - 1);
+  }
+
+  function copyNumbers() {
+    const text = customers.map(c => `${c.firstName} ${c.lastName}: +91${c.mobile1}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
+
+  function copyMessages() {
+    const text = customers.map(c => `+91${c.mobile1}\n${buildMsg(c)}`).join("\n\n---\n\n");
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   }
 
   if (!customers.length) return null;
 
+  const current = customers[stepIdx];
+  const allDone = sentSet.size === customers.length;
+
   return (
     <div className="border-t border-slate-100 bg-slate-50 rounded-b-2xl">
-      {/* Template customise row */}
-      <div className="px-5 pt-4 pb-2">
-        <div className="flex items-center justify-between mb-2">
+
+      {/* Template row */}
+      <div className="px-5 pt-4 pb-3">
+        <div className="flex items-center justify-between mb-1.5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Message Template</p>
           <button onClick={() => setShowCustomise(s => !s)}
             className="text-xs text-sky-500 hover:text-sky-700 font-medium transition">
-            {showCustomise ? "Hide" : "Customise"}
+            {showCustomise ? "Done" : "Customise"}
           </button>
         </div>
         {showCustomise ? (
-          <textarea
-            value={msgTemplate}
-            onChange={e => setMsgTemplate(e.target.value)}
-            rows={2}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 resize-none"
-          />
+          <textarea value={msgTemplate} onChange={e => setMsgTemplate(e.target.value)} rows={2}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 resize-none" />
         ) : (
-          <p className="text-xs text-slate-400 bg-white border border-slate-100 rounded-lg px-3 py-2 truncate">
-            {msgTemplate}
-          </p>
+          <p className="text-xs text-slate-400 bg-white border border-slate-100 rounded-lg px-3 py-2 truncate">{msgTemplate}</p>
         )}
-        <p className="text-xs text-slate-400 mt-1">Use <code className="bg-slate-100 px-1 rounded">{"{name}"}</code> — replaced with customer's first name</p>
+        <p className="text-xs text-slate-400 mt-1">
+          Use <code className="bg-slate-100 px-1 rounded">{"{name}"}</code> — replaced per customer
+        </p>
       </div>
 
-      {/* Action buttons */}
-      <div className="px-5 pb-4 flex flex-wrap items-center gap-2 mt-2">
-        {/* Send All */}
-        <button
-          onClick={handleSendAll}
-          disabled={sending}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed shadow-sm">
-          {sending ? (
-            <>
-              <Spinner size={14} />
-              Sending {currentIdx !== null ? `${currentIdx + 1}/${customers.length}` : ""}…
-            </>
-          ) : (
-            <>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-              </svg>
-              Send All ({customers.length})
-            </>
-          )}
-        </button>
+      {/* Step-through sender modal */}
+      {senderOpen && (
+        <div className="mx-5 mb-4 border border-green-200 bg-green-50 rounded-xl overflow-hidden">
+          {/* Progress bar */}
+          <div className="h-1 bg-green-100">
+            <div className="h-1 bg-green-400 transition-all duration-300"
+              style={{ width: `${((stepIdx + 1) / customers.length) * 100}%` }} />
+          </div>
 
-        {/* Individual buttons */}
+          <div className="px-4 py-3">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                Step-by-Step Sender
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-semibold">
+                  {stepIdx + 1} / {customers.length}
+                </span>
+                <button onClick={() => setSenderOpen(false)}
+                  className="text-green-400 hover:text-green-700 text-lg leading-none">×</button>
+              </div>
+            </div>
+
+            {allDone ? (
+              <div className="text-center py-3">
+                <p className="text-2xl mb-1">🎉</p>
+                <p className="text-sm font-semibold text-green-700">All {customers.length} messages sent!</p>
+                <button onClick={() => setSenderOpen(false)}
+                  className="mt-3 px-4 py-1.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Current customer */}
+                <div className="bg-white rounded-lg px-3 py-2.5 mb-3 border border-green-100">
+                  <p className="font-semibold text-slate-800 uppercase text-sm">
+                    {sentSet.has(stepIdx) && <span className="text-green-500 mr-1">✓</span>}
+                    {current.firstName} {current.middleName} {current.lastName}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">+91 {current.mobile1}</p>
+                  <p className="text-xs text-slate-500 mt-1.5 italic">"{buildMsg(current)}"</p>
+                </div>
+
+                {/* Progress dots */}
+                <div className="flex gap-1 justify-center mb-3 flex-wrap">
+                  {customers.map((_, i) => (
+                    <button key={i} onClick={() => setStepIdx(i)}
+                      className={`w-2 h-2 rounded-full transition
+                        ${i === stepIdx ? "bg-green-500 w-4" : sentSet.has(i) ? "bg-green-300" : "bg-slate-200"}`} />
+                  ))}
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button onClick={goPrev} disabled={stepIdx === 0}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 text-sm font-semibold disabled:opacity-30 hover:bg-slate-50 transition">
+                    ← Prev
+                  </button>
+
+                  <a href={`https://wa.me/91${current.mobile1}?text=${encodeURIComponent(buildMsg(current))}`}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={() => { setSentSet(prev => new Set([...prev, stepIdx])); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition">
+                    {WA_ICON}
+                    {sentSet.has(stepIdx) ? "Open Again" : "Open WhatsApp"}
+                  </a>
+
+                  <button onClick={goNext}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">
+                    {stepIdx === customers.length - 1 ? "Finish" : "Next →"}
+                  </button>
+                </div>
+
+                {!sentSet.has(stepIdx) && (
+                  <p className="text-xs text-green-600 text-center mt-2">
+                    Click "Open WhatsApp" → send the message → come back → click Next →
+                  </p>
+                )}
+                {sentSet.has(stepIdx) && stepIdx < customers.length - 1 && (
+                  <p className="text-xs text-green-600 text-center mt-2">
+                    ✓ Opened — click Next → when you've sent it
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom action bar */}
+      <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
+        {/* Start step sender */}
+        {!senderOpen && (
+          <button onClick={startSender}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition shadow-sm">
+            {WA_ICON}
+            Send All ({customers.length}) — Step by Step
+          </button>
+        )}
+
+        {/* Individual quick links */}
         <div className="flex gap-1.5 flex-wrap">
           {customers.map((c, i) => (
             <a key={c._id}
               href={`https://wa.me/91${c.mobile1}?text=${encodeURIComponent(buildMsg(c))}`}
               target="_blank" rel="noopener noreferrer"
+              onClick={() => setSentSet(prev => new Set([...prev, i]))}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition
-                ${sent.includes(i)
+                ${sentSet.has(i)
                   ? "bg-green-100 text-green-700 border-green-300"
                   : "bg-white text-green-700 border-green-200 hover:bg-green-50"}`}>
-              {sent.includes(i) ? "✓ " : ""}{c.firstName}
+              {sentSet.has(i) ? "✓ " : ""}{c.firstName}
             </a>
           ))}
         </div>
 
-        {/* Divider */}
-        <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+        <div className="w-px h-5 bg-slate-200 mx-0.5 hidden sm:block" />
 
-        {/* Copy Numbers */}
-        <button onClick={handleCopyNumbers}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
+        <button onClick={copyNumbers}
+          className="px-3 py-1.5 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
           📋 Copy Numbers
         </button>
-
-        {/* Copy Messages */}
-        <button onClick={handleCopyMessages}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
+        <button onClick={copyMessages}
+          className="px-3 py-1.5 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
           📝 Copy Messages
         </button>
-
-        {copied && (
-          <span className="text-xs text-emerald-600 font-semibold animate-pulse">✓ Copied!</span>
-        )}
+        {copied && <span className="text-xs text-emerald-600 font-semibold">✓ Copied!</span>}
       </div>
-
-      {sending && (
-        <div className="px-5 pb-3">
-          <p className="text-xs text-slate-400">
-            Opening WhatsApp tabs one by one… Allow popups if your browser blocks them.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
