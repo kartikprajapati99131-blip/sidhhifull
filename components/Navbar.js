@@ -15,6 +15,7 @@ export default function Navbar() {
   const isAdmin = session?.user?.role === "admin";
   const isStaff = session?.user?.role === "staff";
   const isMistry = session?.user?.role === "mistry";
+  const isSales = session?.user?.role === "sales";
   const isUser = session?.user?.role === "user";
   const isAccounts = session?.user?.role === "accounts";
 
@@ -118,6 +119,29 @@ export default function Navbar() {
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                         { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
+                      ].map((it) => (
+                        <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
+                      ))}
+                      <div className="h-px bg-slate-100 mx-2 my-1" />
+                      <SignOutRow />
+                    </DropPanel>
+                  )}
+                </div>
+              )}
+              {isAccounts && (
+                <div className="relative">
+                  <button
+                    onClick={() => setStaffOpen((v) => !v)}
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-500 text-white text-[12px] font-semibold shadow shadow-orange-200 hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-200" />
+                    Staff
+                    <ChevronDown size={13} className={`transition-transform duration-200 ${staffOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {staffOpen && (
+                    <DropPanel onClose={() => setStaffOpen(false)}>
+                      {[
+                        { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
                       ))}

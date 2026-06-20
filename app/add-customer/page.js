@@ -20,10 +20,10 @@ const EMPTY_FILTERS = {
 
 const SUGGESTIONS = {
   religion: ["HINDU", "ISLAM", "CHRISTIAN", "SIKH", "JAIN", "BUDDHIST", "PARSI", "OTHER"],
-  city:     ["AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "PALANPUR", "GANDHINAGAR", "ANAND", "MEHSANA"],
+  city: ["AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "PALANPUR", "GANDHINAGAR", "ANAND", "MEHSANA"],
   district: ["BANASKANTHA", "AHMEDABAD", "SURAT", "VADODARA", "RAJKOT", "GANDHINAGAR", "ANAND", "MEHSANA"],
-  state:    ["GUJARAT", "MAHARASHTRA", "RAJASTHAN", "MADHYA PRADESH", "DELHI", "UTTAR PRADESH"],
-  area:     ["MAIN ROAD", "NEAR BUS STAND", "NEAR RAILWAY STATION", "BEHIND HOSPITAL", "NEAR TEMPLE"],
+  state: ["GUJARAT", "MAHARASHTRA", "RAJASTHAN", "MADHYA PRADESH", "DELHI", "UTTAR PRADESH"],
+  area: ["MAIN ROAD", "NEAR BUS STAND", "NEAR RAILWAY STATION", "BEHIND HOSPITAL", "NEAR TEMPLE"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,16 +90,16 @@ function SuggestionChips({ field, value, onSelect }) {
 
 // ── Category select ───────────────────────────────────────────────────────────
 function CategorySelect({ value, onChange, isAdmin, categories, onCategoryAdded }) {
-  const [adding,   setAdding]   = useState(false);
-  const [newCat,   setNewCat]   = useState("");
-  const [saving,   setSaving]   = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newCat, setNewCat] = useState("");
+  const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState("");
 
   async function handleAdd() {
     const trimmed = newCat.trim().toUpperCase();
     if (!trimmed) { setAddError("Enter a category name."); return; }
     setSaving(true); setAddError("");
-    const res  = await fetch("/api/categories", {
+    const res = await fetch("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: trimmed }),
@@ -208,13 +208,13 @@ function EField({ label, field, type = "text", maxLen, draft, setD, setDCap, isA
 // ── Customer popup ────────────────────────────────────────────────────────────
 function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin, categories, onCategoryAdded }) {
   const [customer, setCustomer] = useState(init);
-  const [editing,  setEditing]  = useState(false);
-  const [draft,    setDraft]    = useState({ ...init });
-  const [saving,   setSaving]   = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ ...init });
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const setD    = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const setD = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const setDCap = (k, v) => setDraft(d => ({ ...d, [k]: cap(v) }));
 
   async function handleDelete() {
@@ -229,9 +229,9 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
   async function handleSave() {
     setSaveError("");
     if (!draft.firstName?.trim()) { setSaveError("First name is required."); return; }
-    if (!draft.lastName?.trim())  { setSaveError("Last name is required."); return; }
+    if (!draft.lastName?.trim()) { setSaveError("Last name is required."); return; }
     setSaving(true);
-    const res  = await fetch(`/api/customers/${customer._id}`, {
+    const res = await fetch(`/api/customers/${customer._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
@@ -248,21 +248,21 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
   }
 
   const EDIT_FIELDS = [
-    { label: "Category",         field: "category",   type: "select-category" },
-    { label: "First Name",       field: "firstName" },
-    { label: "Middle Name",      field: "middleName" },
-    { label: "Last Name",        field: "lastName" },
-    { label: "Primary Mobile",   field: "mobile1",    type: "tel", maxLen: 10 },
-    { label: "Secondary Mobile", field: "mobile2",    type: "tel", maxLen: 10 },
-    { label: "Address 1",        field: "address1" },
-    { label: "Address 2",        field: "address2" },
-    { label: "Area",             field: "area" },
-    { label: "City",             field: "city" },
-    { label: "District",         field: "district" },
-    { label: "State",            field: "state" },
-    { label: "Pincode",          field: "pincode",    maxLen: 6 },
-    { label: "Blood Group",      field: "bloodGroup", type: "select-blood" },
-    { label: "Religion",         field: "religion" },
+    { label: "Category", field: "category", type: "select-category" },
+    { label: "First Name", field: "firstName" },
+    { label: "Middle Name", field: "middleName" },
+    { label: "Last Name", field: "lastName" },
+    { label: "Primary Mobile", field: "mobile1", type: "tel", maxLen: 10 },
+    { label: "Secondary Mobile", field: "mobile2", type: "tel", maxLen: 10 },
+    { label: "Address 1", field: "address1" },
+    { label: "Address 2", field: "address2" },
+    { label: "Area", field: "area" },
+    { label: "City", field: "city" },
+    { label: "District", field: "district" },
+    { label: "State", field: "state" },
+    { label: "Pincode", field: "pincode", maxLen: 6 },
+    { label: "Blood Group", field: "bloodGroup", type: "select-blood" },
+    { label: "Religion", field: "religion" },
   ];
 
   return (
@@ -298,17 +298,17 @@ function CustomerPopup({ customer: init, onClose, onDeleted, onUpdated, isAdmin,
             </div>
           ) : (
             <>
-              <PopupRow label="Primary Mobile"   value={customer.mobile1} />
+              <PopupRow label="Primary Mobile" value={customer.mobile1} />
               <PopupRow label="Secondary Mobile" value={customer.mobile2} />
-              <PopupRow label="Address 1"        value={customer.address1} />
-              <PopupRow label="Address 2"        value={customer.address2} />
-              <PopupRow label="Area"             value={customer.area} />
-              <PopupRow label="City"             value={customer.city} />
-              <PopupRow label="District"         value={customer.district} />
-              <PopupRow label="State"            value={customer.state} />
-              <PopupRow label="Pincode"          value={customer.pincode} />
-              <PopupRow label="Blood Group"      value={customer.bloodGroup} />
-              <PopupRow label="Religion"         value={customer.religion} />
+              <PopupRow label="Address 1" value={customer.address1} />
+              <PopupRow label="Address 2" value={customer.address2} />
+              <PopupRow label="Area" value={customer.area} />
+              <PopupRow label="City" value={customer.city} />
+              <PopupRow label="District" value={customer.district} />
+              <PopupRow label="State" value={customer.state} />
+              <PopupRow label="Pincode" value={customer.pincode} />
+              <PopupRow label="Blood Group" value={customer.bloodGroup} />
+              <PopupRow label="Religion" value={customer.religion} />
             </>
           )}
         </div>
@@ -441,21 +441,21 @@ function FilterPills({ filters, onRemove }) {
 
 // ── Search Panel ──────────────────────────────────────────────────────────────
 function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
-  const [filters,   setFilters]   = useState(EMPTY_FILTERS);
-  const [applied,   setApplied]   = useState(EMPTY_FILTERS); // last-searched state
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [applied, setApplied] = useState(EMPTY_FILTERS); // last-searched state
   const [customers, setCustomers] = useState([]);
-  const [total,     setTotal]     = useState(0);
-  const [page,      setPage]      = useState(1);
-  const [loading,   setLoading]   = useState(false);
-  const [popup,     setPopup]     = useState(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [popup, setPopup] = useState(null);
 
   const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
 
   const doSearch = useCallback(async (p, f) => {
     setLoading(true);
     try {
-      const qs   = filtersToQS(f, { page: p, limit: 20 });
-      const res  = await fetch(`/api/customers?${qs}`);
+      const qs = filtersToQS(f, { page: p, limit: 20 });
+      const res = await fetch(`/api/customers?${qs}`);
       const data = await res.json();
       setCustomers(data.customers || []);
       setTotal(data.total || 0);
@@ -574,10 +574,10 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
 // ── Export Bar ────────────────────────────────────────────────────────────────
 function ExportBar({ categories }) {
   const EXPORT_EMPTY = { category: "", bloodGroup: "", name: "", religion: "", city: "" };
-  const [filters,  setFilters]  = useState(EXPORT_EMPTY);
-  const [fields,   setFields]   = useState("full");
-  const [loading,  setLoading]  = useState(null);
-  const [preview,  setPreview]  = useState(null);
+  const [filters, setFilters] = useState(EXPORT_EMPTY);
+  const [fields, setFields] = useState("full");
+  const [loading, setLoading] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [counting, setCounting] = useState(false);
 
   const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
@@ -589,8 +589,8 @@ function ExportBar({ categories }) {
     countRef.current = setTimeout(async () => {
       setCounting(true);
       try {
-        const qs   = filtersToQS(filters, { page: 1, limit: 1 });
-        const res  = await fetch(`/api/customers?${qs}`);
+        const qs = filtersToQS(filters, { page: 1, limit: 1 });
+        const res = await fetch(`/api/customers?${qs}`);
         const data = await res.json();
         setPreview({ total: data.total ?? 0 });
       } catch { /* silent */ }
@@ -695,30 +695,30 @@ function ExportBar({ categories }) {
 
 // ── Add Form ──────────────────────────────────────────────────────────────────
 function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
-  const [form,       setForm]       = useState(EMPTY_FORM);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [mob1Status, setMob1Status] = useState("idle");
   const [mob2Status, setMob2Status] = useState("idle");
   const [matchedCustomer, setMatchedCustomer] = useState(null);
-  const [showPopup,  setShowPopup]  = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [success,    setSuccess]    = useState(false);
-  const [error,      setError]      = useState("");
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
   const debounce1 = useRef(null);
   const debounce2 = useRef(null);
 
-  const set    = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCap = (k, v) => setForm(f => ({ ...f, [k]: cap(v) }));
 
   const checkMobile = useCallback((mobile, field) => {
-    const ref       = field === "mobile1" ? debounce1 : debounce2;
+    const ref = field === "mobile1" ? debounce1 : debounce2;
     const setStatus = field === "mobile1" ? setMob1Status : setMob2Status;
     clearTimeout(ref.current);
     if (!mobile || mobile.length !== 10) { setStatus("idle"); return; }
     setStatus("checking");
     ref.current = setTimeout(async () => {
       try {
-        const res  = await fetch(`/api/customers/check?mobile=${mobile}`);
+        const res = await fetch(`/api/customers/check?mobile=${mobile}`);
         const data = await res.json();
         if (data.found) {
           setStatus("exists");
@@ -741,10 +741,10 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
     e.preventDefault(); setError("");
     if (!form.mobile1 || form.mobile1.length !== 10) { setError("Primary mobile must be 10 digits."); return; }
     if (!form.firstName.trim()) { setError("First name is required."); return; }
-    if (!form.lastName.trim())  { setError("Last name is required."); return; }
+    if (!form.lastName.trim()) { setError("Last name is required."); return; }
 
     setSubmitting(true);
-    const res  = await fetch("/api/customers", {
+    const res = await fetch("/api/customers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, createdBy: userEmail || "" }),
@@ -762,17 +762,17 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
   }
 
   const mob1Hint = {
-    idle:     <p className="text-xs text-slate-400 mt-1">Enter 10-digit number — we'll check the database</p>,
+    idle: <p className="text-xs text-slate-400 mt-1">Enter 10-digit number — we'll check the database</p>,
     checking: <p className="text-xs text-sky-500 mt-1 flex items-center gap-1"><Spinner size={11} /> Checking…</p>,
-    new:      <p className="text-xs text-emerald-600 mt-1">✓ Number is new — fill the form below</p>,
-    exists:   <p className="text-xs text-amber-600 mt-1">⚠ Already registered — details shown above</p>,
+    new: <p className="text-xs text-emerald-600 mt-1">✓ Number is new — fill the form below</p>,
+    exists: <p className="text-xs text-amber-600 mt-1">⚠ Already registered — details shown above</p>,
   }[mob1Status];
 
   const mob2Hint = {
-    idle:     null,
+    idle: null,
     checking: <p className="text-xs text-sky-500 mt-1 flex items-center gap-1"><Spinner size={11} /> Checking…</p>,
-    new:      <p className="text-xs text-emerald-600 mt-1">✓ Number is available</p>,
-    exists:   <p className="text-xs text-amber-600 mt-1">⚠ This number belongs to another customer</p>,
+    new: <p className="text-xs text-emerald-600 mt-1">✓ Number is available</p>,
+    exists: <p className="text-xs text-amber-600 mt-1">⚠ This number belongs to another customer</p>,
   }[mob2Status];
 
   const showForm = mob1Status === "new";
@@ -783,7 +783,7 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
         <CustomerPopup customer={matchedCustomer} isAdmin={isAdmin} categories={categories}
           onCategoryAdded={onCategoryAdded}
           onClose={() => { setShowPopup(false); setMatchedCustomer(null); }}
-          onDeleted={() => {}} onUpdated={updated => setMatchedCustomer(updated)} />
+          onDeleted={() => { }} onUpdated={updated => setMatchedCustomer(updated)} />
       )}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -799,8 +799,8 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
                   value={form.mobile1} onChange={e => handleMobileChange("mobile1", e.target.value)}
                   className={`${inputCls} pr-9 ${mob1Status === "exists" ? "border-amber-300 ring-amber-200" : mob1Status === "new" ? "border-emerald-300" : ""}`} />
                 {mob1Status === "checking" && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner size={15} /></span>}
-                {mob1Status === "new"      && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">✓</span>}
-                {mob1Status === "exists"   && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500">!</span>}
+                {mob1Status === "new" && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">✓</span>}
+                {mob1Status === "exists" && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500">!</span>}
               </div>
               {mob1Hint}
             </Field>
@@ -935,24 +935,25 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = {
-  admin:    [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }, { key: "export", label: "Export" }],
+  admin: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }, { key: "export", label: "Export" }],
   accounts: [{ key: "add", label: "Add Customer" }, { key: "search", label: "All Customers" }],
+  sales: [{ key: "add", label: "Add Customer" }],
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AddCustomerPage() {
   const { data: session, status } = useSession();
-  const [tab,        setTab]        = useState("add");
+  const [tab, setTab] = useState("add");
   const [categories, setCategories] = useState([]);
 
-  const role    = session?.user?.role;
+  const role = session?.user?.role;
   const isAdmin = role === "admin";
 
   useEffect(() => {
     fetch("/api/categories")
       .then(r => r.json())
       .then(d => setCategories(d.categories || []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   function handleCategoryAdded(newList) { setCategories(newList); }
@@ -968,7 +969,7 @@ export default function AddCustomerPage() {
     );
   }
 
-  if (!session || (role !== "admin" && role !== "accounts")) return <NotFoundPage />;
+  if (!session || (role !== "admin" && role !== "accounts" && role !== "sales")) return <NotFoundPage />;
 
   const tabs = TABS[role] || TABS.accounts;
 
@@ -980,11 +981,14 @@ export default function AddCustomerPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Customer Management</h1>
             <p className="text-slate-400 text-sm mt-0.5">
-              {isAdmin ? "Admin" : "Accounts"} · {session?.user?.name || session?.user?.email}
+              {isAdmin ? "Admin" : role === "sales" ? "Sales" : "Accounts"} · {session?.user?.name || session?.user?.email}
             </p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isAdmin ? "bg-sky-50 text-sky-600 border-sky-200" : "bg-violet-50 text-violet-600 border-violet-200"}`}>
-            {isAdmin ? "Admin" : "Accounts"}
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isAdmin ? "bg-sky-50 text-sky-600 border-sky-200"
+              : role === "sales" ? "bg-amber-50 text-amber-600 border-amber-200"
+                : "bg-violet-50 text-violet-600 border-violet-200"
+            }`}>
+            {isAdmin ? "Admin" : role === "sales" ? "Sales" : "Accounts"}
           </span>
         </div>
       </div>
@@ -1003,7 +1007,7 @@ export default function AddCustomerPage() {
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
-        {tab === "add"    && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "add" && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "search" && <SearchPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "export" && isAdmin && <ExportBar categories={categories} />}
       </div>
