@@ -475,6 +475,7 @@ function FilterPills({ filters, onRemove }) {
 }
 
 // ── Search Panel ──────────────────────────────────────────────────────────────
+// ── Search Panel ──────────────────────────────────────────────────────────────
 function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
@@ -513,8 +514,6 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
     setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
     setPopup(updated);
   }
-
-  const hasDateFilter = filters.dateFrom || filters.dateTo;
 
   return (
     <div className="space-y-4">
@@ -562,7 +561,25 @@ function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
         </div>
 
         {/* Row 3 — addedBy + date range */}
-
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <input placeholder="Added By (email / name)"
+            value={filters.addedBy}
+            onChange={e => setF("addedBy", e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added From</label>
+            <input type="date" value={filters.dateFrom}
+              onChange={e => setF("dateFrom", e.target.value)}
+              className={dateInputCls} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added To</label>
+            <input type="date" value={filters.dateTo}
+              onChange={e => setF("dateTo", e.target.value)}
+              className={dateInputCls} />
+          </div>
+        </div>
 
         <div className="flex gap-2">
           <button onClick={handleSearch}
