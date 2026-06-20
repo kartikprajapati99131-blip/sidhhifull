@@ -971,6 +971,410 @@ function BirthdaysToday({ isAdmin, categories, onCategoryAdded }) {
   );
 }
 
+// ── Bulk WhatsApp Footer (generic — used by the Send by Category panel) ──────
+function BulkWAFooter({ customers }) {
+  const [msgTemplate, setMsgTemplate] = useState("Hello {name}! 👋 Thank you for being a valued customer.");
+  const [showCustomise, setShowCustomise] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // Step-through sender state
+  const [senderOpen, setSenderOpen] = useState(false);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [sentSet, setSentSet] = useState(new Set());
+
+  function buildMsg(c) {
+    return msgTemplate.replace(/\{name\}/gi, c.firstName);
+  }
+
+  function startSender() {
+    setStepIdx(0);
+    setSentSet(new Set());
+    setSenderOpen(true);
+  }
+
+  function goNext() {
+    if (stepIdx < customers.length - 1) setStepIdx(i => i + 1);
+    else setSenderOpen(false);
+  }
+
+  function goPrev() {
+    if (stepIdx > 0) setStepIdx(i => i - 1);
+  }
+
+  function copyNumbers() {
+    const text = customers.map(c => `${c.firstName} ${c.lastName}: +91${c.mobile1}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
+
+  function copyMessages() {
+    const text = customers.map(c => `+91${c.mobile1}\n${buildMsg(c)}`).join("\n\n---\n\n");
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
+
+  if (!customers.length) return null;
+
+  const current = customers[stepIdx];
+  const allDone = sentSet.size === customers.length;
+
+  return (
+    <div className="border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+
+      {/* Template row */}
+      <div className="px-5 pt-4 pb-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Message Template</p>
+          <button onClick={() => setShowCustomise(s => !s)}
+            className="text-xs text-sky-500 hover:text-sky-700 font-medium transition">
+            {showCustomise ? "Done" : "Customise"}
+          </button>
+        </div>
+        {showCustomise ? (
+          <textarea value={msgTemplate} onChange={e => setMsgTemplate(e.target.value)} rows={2}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 resize-none" />
+        ) : (
+          <p className="text-xs text-slate-400 bg-white border border-slate-100 rounded-lg px-3 py-2 truncate">{msgTemplate}</p>
+        )}
+        <p className="text-xs text-slate-400 mt-1">
+          Use <code className="bg-slate-100 px-1 rounded">{"{name}"}</code> — replaced per customer
+        </p>
+      </div>
+
+      {/* Step-through sender modal */}
+      {senderOpen && (
+        <div className="mx-5 mb-4 border border-green-200 bg-green-50 rounded-xl overflow-hidden">
+          {/* Progress bar */}
+          <div className="h-1 bg-green-100">
+            <div className="h-1 bg-green-400 transition-all duration-300"
+              style={{ width: `${((stepIdx + 1) / customers.length) * 100}%` }} />
+          </div>
+
+          <div className="px-4 py-3">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                Step-by-Step Sender
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-semibold">
+                  {stepIdx + 1} / {customers.length}
+                </span>
+                <button onClick={() => setSenderOpen(false)}
+                  className="text-green-400 hover:text-green-700 text-lg leading-none">×</button>
+              </div>
+            </div>
+
+            {allDone ? (
+              <div className="text-center py-3">
+                <p className="text-2xl mb-1">🎉</p>
+                <p className="text-sm font-semibold text-green-700">All {customers.length} messages sent!</p>
+                <button onClick={() => setSenderOpen(false)}
+                  className="mt-3 px-4 py-1.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Current customer */}
+                <div className="bg-white rounded-lg px-3 py-2.5 mb-3 border border-green-100">
+                  <p className="font-semibold text-slate-800 uppercase text-sm">
+                    {sentSet.has(stepIdx) && <span className="text-green-500 mr-1">✓</span>}
+                    {current.firstName} {current.middleName} {current.lastName}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">+91 {current.mobile1}</p>
+                  <p className="text-xs text-slate-500 mt-1.5 italic">"{buildMsg(current)}"</p>
+                </div>
+
+                {/* Progress dots */}
+                <div className="flex gap-1 justify-center mb-3 flex-wrap">
+                  {customers.map((_, i) => (
+                    <button key={i} onClick={() => setStepIdx(i)}
+                      className={`w-2 h-2 rounded-full transition
+                        ${i === stepIdx ? "bg-green-500 w-4" : sentSet.has(i) ? "bg-green-300" : "bg-slate-200"}`} />
+                  ))}
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button onClick={goPrev} disabled={stepIdx === 0}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 text-sm font-semibold disabled:opacity-30 hover:bg-slate-50 transition">
+                    ← Prev
+                  </button>
+
+                  <a href={`https://wa.me/91${current.mobile1}?text=${encodeURIComponent(buildMsg(current))}`}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={() => { setSentSet(prev => new Set([...prev, stepIdx])); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition">
+                    {WA_ICON}
+                    {sentSet.has(stepIdx) ? "Open Again" : "Open WhatsApp"}
+                  </a>
+
+                  <button onClick={goNext}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">
+                    {stepIdx === customers.length - 1 ? "Finish" : "Next →"}
+                  </button>
+                </div>
+
+                {!sentSet.has(stepIdx) && (
+                  <p className="text-xs text-green-600 text-center mt-2">
+                    Click "Open WhatsApp" → send the message → come back → click Next →
+                  </p>
+                )}
+                {sentSet.has(stepIdx) && stepIdx < customers.length - 1 && (
+                  <p className="text-xs text-green-600 text-center mt-2">
+                    ✓ Opened — click Next → when you've sent it
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom action bar */}
+      <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
+        {/* Start step sender */}
+        {!senderOpen && (
+          <button onClick={startSender}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition shadow-sm">
+            {WA_ICON}
+            Send All ({customers.length}) — Step by Step
+          </button>
+        )}
+
+        {/* Individual quick links */}
+        <div className="flex gap-1.5 flex-wrap">
+          {customers.map((c, i) => (
+            <a key={c._id}
+              href={`https://wa.me/91${c.mobile1}?text=${encodeURIComponent(buildMsg(c))}`}
+              target="_blank" rel="noopener noreferrer"
+              onClick={() => setSentSet(prev => new Set([...prev, i]))}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition
+                ${sentSet.has(i)
+                  ? "bg-green-100 text-green-700 border-green-300"
+                  : "bg-white text-green-700 border-green-200 hover:bg-green-50"}`}>
+              {sentSet.has(i) ? "✓ " : ""}{c.firstName}
+            </a>
+          ))}
+        </div>
+
+        <div className="w-px h-5 bg-slate-200 mx-0.5 hidden sm:block" />
+
+        <button onClick={copyNumbers}
+          className="px-3 py-1.5 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
+          📋 Copy Numbers
+        </button>
+        <button onClick={copyMessages}
+          className="px-3 py-1.5 rounded-lg bg-white text-slate-600 text-xs font-semibold border border-slate-200 hover:bg-slate-100 transition">
+          📝 Copy Messages
+        </button>
+        {copied && <span className="text-xs text-emerald-600 font-semibold">✓ Copied!</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── Send By Category (filters + bulk WhatsApp send, mirrors the Birthdays flow) ─
+function SendByCategoryPanel({ isAdmin, categories, onCategoryAdded }) {
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [applied, setApplied] = useState(null); // null = no search run yet
+  const [customers, setCustomers] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [popup, setPopup] = useState(null);
+
+  const setF = useCallback((k, v) => setFilters(f => ({ ...f, [k]: v })), []);
+
+  // Fetches ALL customers matching the filters (not just one page) so the
+  // full matching set is available to message — same pattern as Birthdays Today.
+  const fetchAll = useCallback(async (f) => {
+    setLoading(true);
+    try {
+      let all = [];
+      let page = 1;
+      let hasMore = true;
+      let grandTotal = 0;
+      while (hasMore) {
+        const qs = filtersToQS(f, { page, limit: 100 });
+        const res = await fetch(`/api/customers?${qs}`);
+        const data = await res.json();
+        grandTotal = data.total || 0;
+        all = [...all, ...(data.customers || [])];
+        if (all.length >= grandTotal || !data.customers?.length) hasMore = false;
+        else page++;
+        if (page > 50) break; // safety cap
+      }
+      setCustomers(all);
+      setTotal(grandTotal);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }, []);
+
+  function handleSearch() { setApplied(filters); fetchAll(filters); }
+  function handleReset() { setFilters(EMPTY_FILTERS); setApplied(null); setCustomers([]); setTotal(0); }
+  function removeFilter(k) {
+    const next = { ...(applied || filters), [k]: "" };
+    setFilters(next); setApplied(next); fetchAll(next);
+  }
+  function handleUpdated(updated) {
+    setCustomers(cs => cs.map(c => c._id === updated._id ? updated : c));
+    setPopup(updated);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+          Send WhatsApp by Category
+          {applied && <span className="ml-auto text-xs font-normal text-slate-400">{total.toLocaleString()} match{total !== 1 ? "es" : ""}</span>}
+        </h3>
+
+        {/* Row 1 — general search + name */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+          <input placeholder="Name / Mobile / City…"
+            value={filters.search}
+            onChange={e => setF("search", cap(e.target.value))}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={`${inputCls} lg:col-span-2`} />
+          <input placeholder="Name"
+            value={filters.name}
+            onChange={e => setF("name", cap(e.target.value))}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+        </div>
+
+        {/* Row 2 — category / blood / religion / city */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <select value={filters.category} onChange={e => setF("category", e.target.value)} className={inputCls}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filters.bloodGroup} onChange={e => setF("bloodGroup", e.target.value)} className={inputCls}>
+            <option value="">All Blood Groups</option>
+            {BLOOD_GROUPS.filter(Boolean).map(b => <option key={b}>{b}</option>)}
+          </select>
+          <input placeholder="Religion"
+            value={filters.religion}
+            onChange={e => setF("religion", cap(e.target.value))}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+          <input placeholder="City"
+            value={filters.city}
+            onChange={e => setF("city", cap(e.target.value))}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+        </div>
+
+        {/* Row 3 — addedBy + date range */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <input placeholder="Added By (email / name)"
+            value={filters.addedBy}
+            onChange={e => setF("addedBy", e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className={inputCls} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added From</label>
+            <input type="date" value={filters.dateFrom}
+              onChange={e => setF("dateFrom", e.target.value)}
+              className={dateInputCls} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Added To</label>
+            <input type="date" value={filters.dateTo}
+              onChange={e => setF("dateTo", e.target.value)}
+              className={dateInputCls} />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={handleSearch} disabled={loading}
+            className="px-6 py-2 rounded-lg bg-sky-500 text-white text-sm font-semibold hover:bg-sky-600 transition disabled:opacity-60 flex items-center gap-2">
+            {loading && <Spinner size={14} />}
+            {loading ? "Loading…" : "Find Customers"}
+          </button>
+          <button onClick={handleReset}
+            className="px-6 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold hover:bg-slate-200 transition">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {applied && <FilterPills filters={applied} onRemove={removeFilter} />}
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Spinner size={32} /></div>
+      ) : applied === null ? (
+        <div className="bg-white border border-slate-200 rounded-2xl py-16 text-center shadow-sm">
+          <p className="text-4xl mb-3">📨</p>
+          <p className="text-slate-500 text-sm font-medium">Pick filters above and click "Find Customers" to build your send list.</p>
+        </div>
+      ) : customers.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl py-16 text-center shadow-sm">
+          <p className="text-4xl mb-3">🔍</p>
+          <p className="text-slate-500 text-sm font-medium">No customers match your filters.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
+            <p className="text-sm text-slate-500">
+              <strong>{customers.length}</strong> customer{customers.length !== 1 ? "s" : ""} ready to message
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left">
+                  {["#", "Name", "Mobile 1", "City", "Blood", "Religion", ""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((c, i) => (
+                  <tr key={c._id} className="border-t border-slate-100 hover:bg-sky-50/40 transition">
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap uppercase">
+                      {c.firstName} {c.middleName} {c.lastName}
+                      {c.category && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-violet-50 text-violet-500 rounded text-xs border border-violet-200 uppercase">{c.category}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">{c.mobile1}</td>
+                    <td className="px-4 py-2.5 text-slate-600 uppercase">{c.city || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {c.bloodGroup
+                        ? <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold border border-red-200">{c.bloodGroup}</span>
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 uppercase">{c.religion || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => setPopup(c)}
+                        className="px-3 py-1 rounded-lg bg-sky-50 text-sky-600 text-xs font-semibold hover:bg-sky-100 border border-sky-200 transition">
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* WhatsApp bulk send footer */}
+          <BulkWAFooter customers={customers} />
+        </div>
+      )}
+
+      {popup && (
+        <CustomerPopup customer={popup} isAdmin={isAdmin} categories={categories}
+          onCategoryAdded={onCategoryAdded} onClose={() => setPopup(null)}
+          onDeleted={() => setCustomers(cs => cs.filter(c => c._id !== popup._id))}
+          onUpdated={handleUpdated} />
+      )}
+    </div>
+  );
+}
+
 // ── Export Bar ────────────────────────────────────────────────────────────────
 function ExportBar({ categories }) {
   const EXPORT_EMPTY = { category: "", bloodGroup: "", name: "", religion: "", city: "", addedBy: "", dateFrom: "", dateTo: "" };
@@ -1364,12 +1768,14 @@ const TABS = {
     { key: "add", label: "Add Customer" },
     { key: "search", label: "All Customers" },
     { key: "birthdays", label: "🎂 Birthdays" },
+    { key: "bulksend", label: "📨 Send by Category" },
     { key: "export", label: "Export" },
   ],
   accounts: [
     { key: "add", label: "Add Customer" },
     { key: "search", label: "All Customers" },
     { key: "birthdays", label: "🎂 Birthdays" },
+    { key: "bulksend", label: "📨 Send by Category" },
   ],
   sales: [
     { key: "add", label: "Add Customer" },
@@ -1445,6 +1851,7 @@ export default function AddCustomerPage() {
         {tab === "add" && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "search" && <SearchPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "birthdays" && <BirthdaysToday isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "bulksend" && <SendByCategoryPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
         {tab === "export" && isAdmin && <ExportBar categories={categories} />}
       </div>
     </div>
