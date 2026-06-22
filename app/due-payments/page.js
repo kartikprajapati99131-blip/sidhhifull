@@ -36,7 +36,7 @@ const TABS = {
     { key: "recovered", label: "✅ Recovered" },
     { key: "reminder",  label: "🔔 Reminders" },
   ],
-  accounts: [
+  collection: [
     { key: "due",       label: "💳 Due Payments" },
     { key: "reminder",  label: "🔔 Reminders" },
   ],
@@ -60,9 +60,9 @@ export default function DuePaymentsPage() {
     );
   }
 
-  if (!session || (role !== "admin" && role !== "accounts")) return <NotFoundPage />;
+  if (!session || (role !== "admin" && role !== "collection")) return <NotFoundPage />;
 
-  const tabs = TABS[role] || TABS.accounts;
+  const tabs = TABS[role] || TABS.collection;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -72,7 +72,7 @@ export default function DuePaymentsPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Payment Due Reminders</h1>
             <p className="text-slate-400 text-sm mt-0.5">
-              {isAdmin ? "Admin" : "Accounts"} · {session?.user?.name || session?.user?.email}
+              {isAdmin ? "Admin" : "Collection"} · {session?.user?.name || session?.user?.email}
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -80,7 +80,7 @@ export default function DuePaymentsPage() {
               ? "bg-sky-50 text-sky-600 border-sky-200"
               : "bg-violet-50 text-violet-600 border-violet-200"
           }`}>
-            {isAdmin ? "Admin" : "Accounts"}
+            {isAdmin ? "Admin" : "Collection"}
           </span>
         </div>
       </div>
