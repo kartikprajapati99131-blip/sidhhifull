@@ -1,67 +1,44 @@
 import mongoose from "mongoose";
 
+// Add these new fields to your existing DuePayment schema.
+// Copy the new fields below into your current model file at @/models/DuePayment.js
+
 const DuePaymentSchema = new mongoose.Schema(
   {
-    customerName: {
-      type: String,
-      required: [true, "Customer name is required"],
-      trim: true,
-    },
-    amount: {
-      type: Number,
-      required: [true, "Amount is required"],
-      min: [0, "Amount cannot be negative"],
-    },
-    dueDate: {
-      type: Date,
-      required: [true, "Due date is required"],
-    },
-    mobile: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    note: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+    customerName: { type: String, required: true, trim: true },
+    amount: { type: Number, required: true },
+    dueDate: { type: Date, required: true },
+    mobile: { type: String, default: "" },
+    note: { type: String, default: "" },
     status: {
       type: String,
       enum: ["pending", "completed"],
       default: "pending",
     },
-    reminderShown: {
-      type: Boolean,
-      default: false,
-    },
-    completedAt: {
-      type: Date,
-      default: null,
-    },
-    // Holds the most recent follow-up date selected from the reminder popup
-    updatedDueDate: {
-      type: Date,
-      default: null,
-    },
-    // Stores the dueDate value right before a follow-up update overwrites it.
-    // Needed so "Today's Updated Follow Ups" can show old vs new due date.
-    previousDueDate: {
-      type: Date,
-      default: null,
-    },
-    // Timestamp of the last time this entry went through the
-    // "Done Calling -> Next Follow Up Date" flow. Used to find entries
-    // that were rescheduled today.
-    lastFollowUpAt: {
-      type: Date,
-      default: null,
-    },
+
+    // --- Existing follow-up fields ---
+    previousDueDate: { type: Date, default: null },
+    updatedDueDate: { type: Date, default: null },
+    lastFollowUpAt: { type: Date, default: null },
+    reminderShown: { type: Boolean, default: false },
+
+    // ✅ NEW: Track regular edits (date/amount/name changes)
+    // Used by TodayUpdatedEntries to show "edited" badge for 4 days
+    lastEditedAt: { type: Date, default: null },
+
+    // ✅ NEW: Completion details
+    completedAt: { type: Date, default: null },
+    paymentMethod: { type: String, enum: ["cash", "check", null], default: null },
+    amountGiven: { type: Number, default: null },       // how much was actually collected
+    originalAmount: { type: Number, default: null },    // amount before partial payment
+    accountStatus: { type: String, enum: ["closed", "continue", null], default: null },
+    remainingAmount: { type: Number, default: 0 },      // leftover if "continue"
   },
-  {
-    timestamps: true, // adds createdAt and updatedAt automatically
-  }
+  { timestamps: true }
 );
 
-export default mongoose.models.DuePayment ||
+const DuePayment =
+  mongoose.models.DuePayment ||
   mongoose.model("DuePayment", DuePaymentSchema);
+
+export default DuePayment;

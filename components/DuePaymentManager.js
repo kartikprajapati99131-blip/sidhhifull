@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import CompleteModal from "./CompleteModal";
 
 const emptyForm = {
   customerName: "",
@@ -45,11 +46,15 @@ export default function DuePaymentManager() {
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
 
-  const [confirmAction, setConfirmAction] = useState(null); // { type: "delete" | "complete", id, name }
+  // Complete modal — replaces the old simple confirm for "complete"
+  const [completingEntry, setCompletingEntry] = useState(null);
+
+  // Delete confirm (kept as simple modal)
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   }, []);
 
   const fetchEntries = useCallback(async () => {
@@ -62,7 +67,7 @@ export default function DuePaymentManager() {
       } else {
         showToast(data.message || "Failed to load due payments", "error");
       }
-    } catch (error) {
+    } catch {
       showToast("Something went wrong while loading due payments", "error");
     } finally {
       setLoading(false);
@@ -100,7 +105,7 @@ export default function DuePaymentManager() {
       } else {
         showToast(data.message || "Failed to add due payment", "error");
       }
-    } catch (error) {
+    } catch {
       showToast("Something went wrong while adding due payment", "error");
     } finally {
       setSubmitting(false);
@@ -158,50 +163,33 @@ export default function DuePaymentManager() {
       } else {
         showToast(data.message || "Failed to update due payment", "error");
       }
-    } catch (error) {
+    } catch {
       showToast("Something went wrong while updating due payment", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ----- Complete / Delete (with confirmation) -----
-  const requestConfirm = (type, entry) => {
-    setConfirmAction({ type, id: entry._id, name: entry.customerName });
-  };
-
-  const cancelConfirm = () => setConfirmAction(null);
-
-  const runConfirmedAction = async () => {
-    if (!confirmAction) return;
-    const { type, id } = confirmAction;
-
+  // ----- Delete -----
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     setSubmitting(true);
     try {
-      const url =
-        type === "complete"
-          ? `/api/due-payments/${id}/complete`
-          : `/api/due-payments/${id}`;
-      const method = type === "complete" ? "PUT" : "DELETE";
-
-      const res = await fetch(url, { method });
+      const res = await fetch(`/api/due-payments/${deleteTarget._id}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
-
       if (data.success) {
-        showToast(
-          type === "complete"
-            ? "Marked as completed"
-            : "Due payment deleted successfully"
-        );
+        showToast("Due payment deleted successfully");
         fetchEntries();
       } else {
-        showToast(data.message || "Action failed", "error");
+        showToast(data.message || "Failed to delete", "error");
       }
-    } catch (error) {
+    } catch {
       showToast("Something went wrong", "error");
     } finally {
       setSubmitting(false);
-      setConfirmAction(null);
+      setDeleteTarget(null);
     }
   };
 
@@ -365,13 +353,13 @@ export default function DuePaymentManager() {
                           Edit
                         </button>
                         <button
-                          onClick={() => requestConfirm("complete", entry)}
+                          onClick={() => setCompletingEntry(entry)}
                           className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                         >
                           Complete
                         </button>
                         <button
-                          onClick={() => requestConfirm("delete", entry)}
+                          onClick={() => setDeleteTarget(entry)}
                           className="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                         >
                           Delete
@@ -477,41 +465,43 @@ export default function DuePaymentManager() {
         </div>
       )}
 
-      {/* Confirm Modal (delete / complete) */}
-      {confirmAction && (
+      {/* Complete Modal */}
+      {completingEntry && (
+        <CompleteModal
+          entry={completingEntry}
+          onClose={() => setCompletingEntry(null)}
+          onSuccess={() => {
+            setCompletingEntry(null);
+            fetchEntries();
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
             <h3 className="mb-2 text-base font-semibold text-slate-800">
-              {confirmAction.type === "delete"
-                ? "Delete Due Payment"
-                : "Mark as Completed"}
+              Delete Due Payment
             </h3>
             <p className="mb-5 text-sm text-slate-600">
-              {confirmAction.type === "delete"
-                ? `Are you sure you want to delete the entry for "${confirmAction.name}"? This cannot be undone.`
-                : `Are you sure you want to mark "${confirmAction.name}" as completed?`}
+              Are you sure you want to delete the entry for &quot;
+              {deleteTarget.customerName}&quot;? This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
-                onClick={cancelConfirm}
+                onClick={() => setDeleteTarget(null)}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
                 Cancel
               </button>
               <button
-                onClick={runConfirmedAction}
+                onClick={handleDelete}
                 disabled={submitting}
-                className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60 ${
-                  confirmAction.type === "delete"
-                    ? "bg-red-600 hover:bg-red-700"
-                    : "bg-emerald-600 hover:bg-emerald-700"
-                }`}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
               >
-                {submitting
-                  ? "Processing..."
-                  : confirmAction.type === "delete"
-                  ? "Delete"
-                  : "Mark Completed"}
+                {submitting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

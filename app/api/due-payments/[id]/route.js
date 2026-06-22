@@ -5,17 +5,13 @@ import mongoose from "mongoose";
 
 // PUT /api/due-payments/[id]
 //
-// This route handles two scenarios with one endpoint:
-//
 // 1. Normal edit (from the admin table "Edit" button):
 //    body: { customerName, amount, dueDate, note, mobile }
-//    -> updates only the provided fields directly.
+//    -> updates fields + sets lastEditedAt to now (shows in "Recent Updates" for 4 days)
 //
 // 2. Follow-up reschedule (from the "Done Calling" popup):
 //    body: { isFollowUp: true, dueDate: "<new follow up date>" }
-//    -> stores the current dueDate into previousDueDate,
-//       sets updatedDueDate + lastFollowUpAt,
-//       and moves dueDate forward to the new follow up date.
+//    -> stores current dueDate in previousDueDate, sets updatedDueDate + lastFollowUpAt
 export async function PUT(request, { params }) {
   try {
     await dbConnect();
@@ -49,7 +45,6 @@ export async function PUT(request, { params }) {
       }
 
       const newDueDate = new Date(dueDate);
-
       existingEntry.previousDueDate = existingEntry.dueDate;
       existingEntry.updatedDueDate = newDueDate;
       existingEntry.dueDate = newDueDate;
@@ -68,12 +63,29 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Regular edit
-    if (customerName !== undefined) existingEntry.customerName = customerName.trim();
-    if (amount !== undefined) existingEntry.amount = Number(amount);
-    if (dueDate !== undefined) existingEntry.dueDate = new Date(dueDate);
+    // Regular edit — track what changed and set lastEditedAt
+    let changed = false;
+
+    if (customerName !== undefined && customerName.trim() !== existingEntry.customerName) {
+      existingEntry.customerName = customerName.trim();
+      changed = true;
+    }
+    if (amount !== undefined && Number(amount) !== existingEntry.amount) {
+      existingEntry.amount = Number(amount);
+      changed = true;
+    }
+    if (dueDate !== undefined) {
+      const newDate = new Date(dueDate);
+      if (newDate.toISOString() !== new Date(existingEntry.dueDate).toISOString()) {
+        existingEntry.dueDate = newDate;
+        changed = true;
+      }
+    }
     if (note !== undefined) existingEntry.note = note;
     if (mobile !== undefined) existingEntry.mobile = mobile;
+
+    // Always mark lastEditedAt when a save happens (even note/mobile changes)
+    existingEntry.lastEditedAt = new Date();
 
     await existingEntry.save();
 
