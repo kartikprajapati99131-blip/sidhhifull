@@ -36,6 +36,7 @@ export default function Navbar() {
         { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
+        { href: "/due-payments", label: "Due Payments", dot: "bg-sky-500" },
 
       ],
     },
