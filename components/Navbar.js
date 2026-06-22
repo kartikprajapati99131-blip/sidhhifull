@@ -37,7 +37,7 @@ export default function Navbar() {
         { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
-        { href: "/due-payments", label: "Due Payments", dot: "bg-sky-500" },
+        { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
 
       ],
     },
@@ -117,7 +117,6 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
-                        { href: "/orders", label: "Orders", dot: "bg-amber-500" },
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                         { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
@@ -248,9 +247,8 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
-                        { href: "/orders", label: "Orders", dot: "bg-amber-500" },
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
-                        { href: "/due-payments", label: "Due Payments", dot: "bg-red-500" },
+                        { href: "/due-payments", label: "Reminders", dot: "bg-red-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                         { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
                       ].map((it) => (

@@ -6,7 +6,7 @@ import mongoose from "mongoose";
 // PUT /api/due-payments/[id]
 //
 // 1. Normal edit (from the admin table "Edit" button):
-//    body: { customerName, amount, dueDate, note, mobile }
+//    body: { customerName, amount, dueDate, note, mobile, mobile2, referencedBy }
 //    -> updates fields + sets lastEditedAt to now (shows in "Recent Updates" for 4 days)
 //
 // 2. Follow-up reschedule (from the "Done Calling" popup):
@@ -25,7 +25,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { customerName, amount, dueDate, note, mobile, isFollowUp } = body;
+    const { customerName, amount, dueDate, note, mobile, mobile2, referencedBy, isFollowUp } = body;
 
     const existingEntry = await DuePayment.findById(id);
 
@@ -74,6 +74,7 @@ export async function PUT(request, { params }) {
       existingEntry.amount = Number(amount);
       changed = true;
     }
+
     if (dueDate !== undefined) {
       const newDate = new Date(dueDate);
       if (newDate.toISOString() !== new Date(existingEntry.dueDate).toISOString()) {
@@ -83,7 +84,9 @@ export async function PUT(request, { params }) {
     }
     if (note !== undefined) existingEntry.note = note;
     if (mobile !== undefined) existingEntry.mobile = mobile;
+    if (mobile2 !== undefined) existingEntry.mobile2 = mobile2;
 
+    if (referencedBy !== undefined) existingEntry.referencedBy = referencedBy;
     // Always mark lastEditedAt when a save happens (even note/mobile changes)
     existingEntry.lastEditedAt = new Date();
 

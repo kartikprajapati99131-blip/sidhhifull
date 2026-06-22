@@ -31,13 +31,13 @@ function Spinner({ size = 16 }) {
 
 const TABS = {
   admin: [
-    { key: "due",       label: "💳 Due Payments" },
+    { key: "due",       label: "💳 All Reminders" },
     { key: "today",     label: "📋 Today's Updates" },
     { key: "recovered", label: "✅ Recovered" },
-    { key: "reminder",  label: "🔔 Reminders" },
+    { key: "reminder",  label: "🔔 Today's Reminders" },
   ],
   collection: [
-    { key: "due",       label: "💳 Due Payments" },
+    { key: "due",       label: "💳 All Reminders" },
     { key: "reminder",  label: "🔔 Reminders" },
   ],
 };

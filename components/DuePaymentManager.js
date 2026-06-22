@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import CompleteModal from "./CompleteModal";
 
 const emptyForm = {
@@ -8,7 +9,9 @@ const emptyForm = {
   amount: "",
   dueDate: "",
   mobile: "",
+  mobile2: "",
   note: "",
+  referencedBy: "",
 };
 
 function formatDate(date) {
@@ -25,9 +28,8 @@ function Toast({ toast }) {
   const isError = toast.type === "error";
   return (
     <div
-      className={`fixed bottom-5 right-5 z-[100] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg transition-all ${
-        isError ? "bg-red-600" : "bg-emerald-600"
-      }`}
+      className={`fixed bottom-5 right-5 z-[100] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg transition-all ${isError ? "bg-red-600" : "bg-emerald-600"
+        }`}
       role="status"
     >
       {toast.message}
@@ -35,8 +37,115 @@ function Toast({ toast }) {
   );
 }
 
+// ── Referenced By select ──────────────────────────────────────────────────
+// Collection role: pick only from existing list.
+// Admin: pick from list OR add a brand new name (persisted via API).
+function ReferenceSelect({ value, onChange, isAdmin, references, onReferenceAdded }) {
+  const [adding, setAdding] = useState(false);
+  const [newRef, setNewRef] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState("");
+
+  async function handleAdd() {
+    const trimmed = newRef.trim();
+    if (!trimmed) {
+      setAddError("Enter a name.");
+      return;
+    }
+    setSaving(true);
+    setAddError("");
+    try {
+      const res = await fetch("/api/due-payments/references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        onReferenceAdded(data.references);
+        onChange(trimmed);
+        setNewRef("");
+        setAdding(false);
+      } else {
+        setAddError(data.message || "Failed to add.");
+      }
+    } catch {
+      setAddError("Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        >
+          <option value="">— None —</option>
+          {references.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => {
+              setAdding((a) => !a);
+              setAddError("");
+              setNewRef("");
+            }}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold whitespace-nowrap transition ${
+              adding
+                ? "border-slate-200 bg-slate-100 text-slate-500"
+                : "border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100"
+            }`}
+          >
+            {adding ? "✕ Cancel" : "+ New"}
+          </button>
+        )}
+      </div>
+      {adding && isAdmin && (
+        <div className="flex items-start gap-2">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="New reference name"
+              value={newRef}
+              onChange={(e) => {
+                setNewRef(e.target.value);
+                setAddError("");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
+              autoFocus
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+            {addError && <p className="mt-1 text-xs text-red-500">{addError}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={saving}
+            className="whitespace-nowrap rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+          >
+            {saving ? "Adding…" : "Add"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DuePaymentManager() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
+
   const [entries, setEntries] = useState([]);
+  const [references, setReferences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -46,11 +155,15 @@ export default function DuePaymentManager() {
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
 
-  // Complete modal — replaces the old simple confirm for "complete"
   const [completingEntry, setCompletingEntry] = useState(null);
-
-  // Delete confirm (kept as simple modal)
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Duplicate-mobile confirmation (admin override flow)
+  const [duplicateWarning, setDuplicateWarning] = useState(null); // { message, existingEntry, pendingPayload }
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [referenceFilter, setReferenceFilter] = useState(""); // "" = All
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -74,13 +187,85 @@ export default function DuePaymentManager() {
     }
   }, [showToast]);
 
+  const fetchReferences = useCallback(async () => {
+    try {
+      const res = await fetch("/api/due-payments/references");
+      const data = await res.json();
+      if (data.success) setReferences(data.references || []);
+    } catch {
+      // non-fatal — dropdown just stays empty
+    }
+  }, []);
+
   useEffect(() => {
     fetchEntries();
-  }, [fetchEntries]);
+    fetchReferences();
+  }, [fetchEntries, fetchReferences]);
 
-  // ----- Add new entry -----
+  // ---- Combined filter: search + reference ----
+  const filteredEntries = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return entries.filter((entry) => {
+      // Reference filter
+      if (referenceFilter) {
+        const ref = (entry.referencedBy || "").trim();
+        if (ref !== referenceFilter) return false;
+      }
+      // Search filter
+      if (term) {
+        const name = (entry.customerName || "").toLowerCase();
+        const mobile = (entry.mobile || "").toLowerCase();
+        const mobile2 = (entry.mobile2 || "").toLowerCase();
+        if (!name.includes(term) && !mobile.includes(term) && !mobile2.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [entries, searchTerm, referenceFilter]);
+
+  // ---- Add entry ----
   const handleFormChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const submitNewEntry = async (payload) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/due-payments/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Due payment added successfully");
+        setForm(emptyForm);
+        setDuplicateWarning(null);
+        fetchEntries();
+        return;
+      }
+
+      // Duplicate mobile number on a pending entry
+      if (data.duplicate) {
+        if (data.canForce) {
+          // Admin: show confirmation, offer to force-create
+          setDuplicateWarning({
+            message: data.message,
+            existingEntry: data.existingEntry,
+            pendingPayload: payload,
+          });
+        } else {
+          showToast(data.message || "A pending entry already exists for this mobile number", "error");
+        }
+        return;
+      }
+
+      showToast(data.message || "Failed to add due payment", "error");
+    } catch {
+      showToast("Something went wrong while adding due payment", "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAddEntry = async (e) => {
@@ -89,30 +274,17 @@ export default function DuePaymentManager() {
       showToast("Name, amount and due date are required", "error");
       return;
     }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/due-payments/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast("Due payment added successfully");
-        setForm(emptyForm);
-        fetchEntries();
-      } else {
-        showToast(data.message || "Failed to add due payment", "error");
-      }
-    } catch {
-      showToast("Something went wrong while adding due payment", "error");
-    } finally {
-      setSubmitting(false);
-    }
+    await submitNewEntry(form);
   };
 
-  // ----- Edit entry -----
+  const handleForceAdd = async () => {
+    if (!duplicateWarning) return;
+    await submitNewEntry({ ...duplicateWarning.pendingPayload, force: true });
+  };
+
+  const handleReferenceAdded = (newList) => setReferences(newList);
+
+  // ---- Edit entry ----
   const openEditModal = (entry) => {
     setEditingEntry(entry);
     setEditForm({
@@ -120,7 +292,9 @@ export default function DuePaymentManager() {
       amount: entry.amount,
       dueDate: entry.dueDate ? entry.dueDate.slice(0, 10) : "",
       mobile: entry.mobile || "",
+      mobile2: entry.mobile2 || "",
       note: entry.note || "",
+      referencedBy: entry.referencedBy || "",
     });
   };
 
@@ -136,12 +310,10 @@ export default function DuePaymentManager() {
   const handleEditSave = async (e) => {
     e.preventDefault();
     if (!editingEntry) return;
-
     if (!editForm.customerName.trim() || !editForm.amount || !editForm.dueDate) {
       showToast("Name, amount and due date are required", "error");
       return;
     }
-
     setSubmitting(true);
     try {
       const res = await fetch(`/api/due-payments/${editingEntry._id}`, {
@@ -152,7 +324,9 @@ export default function DuePaymentManager() {
           amount: editForm.amount,
           dueDate: editForm.dueDate,
           mobile: editForm.mobile,
+          mobile2: editForm.mobile2,
           note: editForm.note,
+          referencedBy: editForm.referencedBy,
         }),
       });
       const data = await res.json();
@@ -170,7 +344,7 @@ export default function DuePaymentManager() {
     }
   };
 
-  // ----- Delete -----
+  // ---- Delete ----
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setSubmitting(true);
@@ -197,19 +371,16 @@ export default function DuePaymentManager() {
     <div className="space-y-6">
       <Toast toast={toast} />
 
-      {/* Add new due payment */}
+      {/* ── Add Due Payment ── */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold text-slate-800">
-          Add Due Payment
-        </h2>
+        <h2 className="mb-4 text-base font-semibold text-slate-800">Add Due Payment</h2>
         <form
           onSubmit={handleAddEntry}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
-          <div className="lg:col-span-1 sm:col-span-1">
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Customer Name
-            </label>
+          {/* Customer Name */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
             <input
               type="text"
               name="customerName"
@@ -220,10 +391,9 @@ export default function DuePaymentManager() {
             />
           </div>
 
+          {/* Amount */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Amount (₹)
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Amount (₹)</label>
             <input
               type="number"
               name="amount"
@@ -235,10 +405,9 @@ export default function DuePaymentManager() {
             />
           </div>
 
+          {/* Due Date */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Due Date
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Due Date</label>
             <input
               type="date"
               name="dueDate"
@@ -248,10 +417,9 @@ export default function DuePaymentManager() {
             />
           </div>
 
+          {/* Mobile */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Mobile Number
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Primary Mobile</label>
             <input
               type="tel"
               name="mobile"
@@ -262,10 +430,39 @@ export default function DuePaymentManager() {
             />
           </div>
 
+          {/* Secondary Mobile */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Note
+              Secondary Mobile <span className="font-normal text-slate-400">(optional)</span>
             </label>
+            <input
+              type="tel"
+              name="mobile2"
+              value={form.mobile2}
+              onChange={handleFormChange}
+              placeholder="9876543210"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Referenced By — dropdown selection */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Referenced By{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <ReferenceSelect
+              value={form.referencedBy}
+              onChange={(v) => setForm((prev) => ({ ...prev, referencedBy: v }))}
+              isAdmin={isAdmin}
+              references={references}
+              onReferenceAdded={handleReferenceAdded}
+            />
+          </div>
+
+          {/* Note */}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Note</label>
             <input
               type="text"
               name="note"
@@ -276,7 +473,8 @@ export default function DuePaymentManager() {
             />
           </div>
 
-          <div className="flex items-end sm:col-span-2 lg:col-span-5">
+          {/* Submit */}
+          <div className="flex items-end sm:col-span-2 lg:col-span-3">
             <button
               type="submit"
               disabled={submitting}
@@ -288,25 +486,90 @@ export default function DuePaymentManager() {
         </form>
       </div>
 
-      {/* Pending payments table */}
+      {/* ── Pending Payments Table ── */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-800">
-            Pending Due Payments
-          </h2>
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            {entries.length} pending
-          </span>
+        {/* Table header / filters */}
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-slate-800">Pending Due Payments</h2>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+              {filteredEntries.length} {searchTerm || referenceFilter ? "found" : "pending"}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Reference filter dropdown */}
+            <div className="relative">
+              <select
+                value={referenceFilter}
+                onChange={(e) => setReferenceFilter(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-48"
+              >
+                <option value="">All References</option>
+                {references.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {/* chevron icon */}
+              <svg
+                className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* Active reference badge (clear button) */}
+            {referenceFilter && (
+              <button
+                onClick={() => setReferenceFilter("")}
+                className="flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-200"
+              >
+                {referenceFilter} ✕
+              </button>
+            )}
+
+            {/* Search box */}
+            <div className="relative w-full sm:w-56">
+              <svg
+                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+              </svg>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search name or mobile"
+                className="w-full rounded-lg border border-slate-300 py-2 pl-8 pr-8 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-sm">
+          <table className="w-full min-w-[850px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3">Name</th>
                 <th className="px-5 py-3">Amount</th>
                 <th className="px-5 py-3">Due Date</th>
                 <th className="px-5 py-3">Mobile</th>
+                <th className="px-5 py-3">Referenced By</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
@@ -314,18 +577,24 @@ export default function DuePaymentManager() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
                     Loading entries...
                   </td>
                 </tr>
               ) : entries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
                     No pending due payments. Add one above.
                   </td>
                 </tr>
+              ) : filteredEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                    No results match the current filters.
+                  </td>
+                </tr>
               ) : (
-                entries.map((entry) => (
+                filteredEntries.map((entry) => (
                   <tr key={entry._id} className="hover:bg-slate-50">
                     <td className="px-5 py-3 font-medium text-slate-800">
                       {entry.customerName}
@@ -336,8 +605,38 @@ export default function DuePaymentManager() {
                     <td className="px-5 py-3 text-slate-700">
                       {formatDate(entry.dueDate)}
                     </td>
-                    <td className="px-5 py-3 text-slate-700">
-                      {entry.mobile || "-"}
+                    <td className="px-5 py-3">
+                      <div className="flex flex-col gap-0.5">
+                        {entry.mobile ? (
+                          <a href={`tel:${entry.mobile}`}
+                            className="text-sky-600 hover:text-sky-800 hover:underline text-sm transition"
+                          >
+                            +91 {entry.mobile}
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                        {entry.mobile2 && (
+                          <a href={`tel:${entry.mobile2}`}
+                            className="text-xs text-slate-400 hover:text-sky-600 hover:underline transition"
+                          >
+                            +91 {entry.mobile2}
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      {entry.referencedBy ? (
+                        <button
+                          onClick={() => setReferenceFilter(entry.referencedBy)}
+                          className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition"
+                          title={`Filter by ${entry.referencedBy}`}
+                        >
+                          {entry.referencedBy}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium capitalize text-amber-700">
@@ -374,139 +673,138 @@ export default function DuePaymentManager() {
         </div>
       </div>
 
-      {/* Edit Modal */}
-      {editingEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-4 text-base font-semibold text-slate-800">
-              Edit Due Payment
-            </h3>
-            <form onSubmit={handleEditSave} className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Customer Name
-                </label>
-                <input
-                  type="text"
-                  name="customerName"
-                  value={editForm.customerName}
-                  onChange={handleEditChange}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={editForm.amount}
-                  onChange={handleEditChange}
-                  min="0"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  name="dueDate"
-                  value={editForm.dueDate}
-                  onChange={handleEditChange}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  name="mobile"
-                  value={editForm.mobile}
-                  onChange={handleEditChange}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Note
-                </label>
-                <textarea
-                  name="note"
-                  value={editForm.note}
-                  onChange={handleEditChange}
-                  rows={2}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
+      {/* ── Edit Modal ── */}
+      {
+        editingEntry && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+              <h3 className="mb-4 text-base font-semibold text-slate-800">Edit Due Payment</h3>
+              <form onSubmit={handleEditSave} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
+                  <input type="text" name="customerName" value={editForm.customerName}
+                    onChange={handleEditChange}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Amount (₹)</label>
+                  <input type="number" name="amount" value={editForm.amount} min="0"
+                    onChange={handleEditChange}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Due Date</label>
+                  <input type="date" name="dueDate" value={editForm.dueDate}
+                    onChange={handleEditChange}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Primary Mobile</label>
+                  <input type="tel" name="mobile" value={editForm.mobile}
+                    onChange={handleEditChange}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Secondary Mobile <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <input type="tel" name="mobile2" value={editForm.mobile2}
+                    onChange={handleEditChange}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {submitting ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                {/* Referenced By dropdown in edit modal */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Referenced By <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <ReferenceSelect
+                    value={editForm.referencedBy}
+                    onChange={(v) => setEditForm((prev) => ({ ...prev, referencedBy: v }))}
+                    isAdmin={isAdmin}
+                    references={references}
+                    onReferenceAdded={handleReferenceAdded}
+                  />
+                </div>
 
-      {/* Complete Modal */}
-      {completingEntry && (
-        <CompleteModal
-          entry={completingEntry}
-          onClose={() => setCompletingEntry(null)}
-          onSuccess={() => {
-            setCompletingEntry(null);
-            fetchEntries();
-          }}
-          showToast={showToast}
-        />
-      )}
-
-      {/* Delete Confirm Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-2 text-base font-semibold text-slate-800">
-              Delete Due Payment
-            </h3>
-            <p className="mb-5 text-sm text-slate-600">
-              Are you sure you want to delete the entry for &quot;
-              {deleteTarget.customerName}&quot;? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={submitting}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {submitting ? "Deleting..." : "Delete"}
-              </button>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Note</label>
+                  <textarea name="note" value={editForm.note} onChange={handleEditChange} rows={2}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={closeEditModal}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={submitting}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                    {submitting ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+
+      {/* ── Complete Modal ── */}
+      {
+        completingEntry && (
+          <CompleteModal
+            entry={completingEntry}
+            onClose={() => setCompletingEntry(null)}
+            onSuccess={() => { setCompletingEntry(null); fetchEntries(); }}
+            showToast={showToast}
+          />
+        )
+      }
+
+      {/* ── Delete Confirm Modal ── */}
+      {
+        deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+              <h3 className="mb-2 text-base font-semibold text-slate-800">Delete Due Payment</h3>
+              <p className="mb-5 text-sm text-slate-600">
+                Are you sure you want to delete the entry for &quot;{deleteTarget.customerName}&quot;? This cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setDeleteTarget(null)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  Cancel
+                </button>
+                <button onClick={handleDelete} disabled={submitting}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
+                  {submitting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* ── Duplicate Mobile Warning (admin override) ── */}
+      {
+        duplicateWarning && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+              <h3 className="mb-2 text-base font-semibold text-amber-700">⚠ Duplicate Mobile Number</h3>
+              <p className="mb-5 text-sm text-slate-600">{duplicateWarning.message}</p>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setDuplicateWarning(null)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  Cancel
+                </button>
+                <button onClick={handleForceAdd} disabled={submitting}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60">
+                  {submitting ? "Adding..." : "Add Anyway"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 }

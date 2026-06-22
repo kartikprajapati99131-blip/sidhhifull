@@ -1,14 +1,12 @@
 import mongoose from "mongoose";
 
-// Add these new fields to your existing DuePayment schema.
-// Copy the new fields below into your current model file at @/models/DuePayment.js
-
 const DuePaymentSchema = new mongoose.Schema(
   {
     customerName: { type: String, required: true, trim: true },
     amount: { type: Number, required: true },
     dueDate: { type: Date, required: true },
-    mobile: { type: String, default: "" },
+    mobile: { type: String, default: null, sparse: true },  // ✅ fixed unique index
+    mobile2: { type: String, default: "" },                 // ✅ ADDED: secondary mobile
     note: { type: String, default: "" },
     status: {
       type: String,
@@ -16,23 +14,28 @@ const DuePaymentSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    // --- Existing follow-up fields ---
+    // --- Follow-up fields ---
     previousDueDate: { type: Date, default: null },
     updatedDueDate: { type: Date, default: null },
     lastFollowUpAt: { type: Date, default: null },
     reminderShown: { type: Boolean, default: false },
 
-    // ✅ NEW: Track regular edits (date/amount/name changes)
-    // Used by TodayUpdatedEntries to show "edited" badge for 4 days
+    referencedBy: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Track regular edits — used by TodayUpdatedEntries for 4-day "edited" badge
     lastEditedAt: { type: Date, default: null },
 
-    // ✅ NEW: Completion details
+    // Completion details
     completedAt: { type: Date, default: null },
     paymentMethod: { type: String, enum: ["cash", "check", null], default: null },
-    amountGiven: { type: Number, default: null },       // how much was actually collected
-    originalAmount: { type: Number, default: null },    // amount before partial payment
+    amountGiven: { type: Number, default: null },
+    originalAmount: { type: Number, default: null },
     accountStatus: { type: String, enum: ["closed", "continue", null], default: null },
-    remainingAmount: { type: Number, default: 0 },      // leftover if "continue"
+    remainingAmount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
