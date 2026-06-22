@@ -38,8 +38,6 @@ const TABS = {
   ],
   accounts: [
     { key: "due",       label: "💳 Due Payments" },
-    { key: "today",     label: "📋 Today's Updates" },
-    { key: "recovered", label: "✅ Recovered" },
     { key: "reminder",  label: "🔔 Reminders" },
   ],
 };
