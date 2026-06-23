@@ -19,6 +19,7 @@ export default function Navbar() {
   const isUser = session?.user?.role === "user";
   const isAccounts = session?.user?.role === "accounts";
   const isCollection = session?.user?.role === "collection";
+  const isLaminate = session?.user?.role === "laminate";
 
   const adminSections = [
     {
@@ -28,6 +29,7 @@ export default function Navbar() {
         { href: "/products", label: "Products", dot: "bg-emerald-500" },
         { href: "/orders", label: "Orders", dot: "bg-amber-500" },
         { href: "/brands", label: "Brands", dot: "bg-amber-500" },
+        { href: "/price-list", label: "Price List", dot: "bg-amber-500" },
       ],
     },
     {
@@ -129,6 +131,35 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+              {/* ── LAMINATE role ── */}
+              {isLaminate && (
+                <div className="relative">
+                  <button
+                    onClick={() => setStaffOpen((v) => !v)}
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white text-[12px] font-semibold shadow shadow-green-200 hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-200" />
+                    Staff
+                    <ChevronDown size={13} className={`transition-transform duration-200 ${staffOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {staffOpen && (
+                    <DropPanel onClose={() => setStaffOpen(false)}>
+                      {[
+                        { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
+                        { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/customer", label: "Customers", dot: "bg-sky-500" },
+                        { href: "/price-list", label: "Price List", dot: "bg-sky-500" },
+                        { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
+                      ].map((it) => (
+                        <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
+                      ))}
+                      <div className="h-px bg-slate-100 mx-2 my-1" />
+                      <SignOutRow />
+                    </DropPanel>
+                  )}
+                </div>
+              )}
+              {/* ── ACCOUNTS role ── */}
               {isAccounts && (
                 <div className="relative">
                   <button
@@ -152,7 +183,6 @@ export default function Navbar() {
                   )}
                 </div>
               )}
-
               {/* ── MISTRY role ── */}
               {isMistry && (
                 <div className="relative">
@@ -178,7 +208,6 @@ export default function Navbar() {
                   )}
                 </div>
               )}
-
               {/* ── ADMIN role ── */}
               {isAdmin && (
                 <div className="relative" ref={dropRef}>

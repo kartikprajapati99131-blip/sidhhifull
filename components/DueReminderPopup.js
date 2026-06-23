@@ -607,8 +607,7 @@ export default function DueReminderPopup() {
           </div>
 
           {/* ── WhatsApp reminder sender ── */}
-          <WhatsAppReminderSender entries={entries} />
-        </div>
+          {isAdmin && <WhatsAppReminderSender entries={entries} />}        </div>
       </div>
 
       {/* Edit Modal */}

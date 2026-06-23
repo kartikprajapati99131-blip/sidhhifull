@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const ROLES = ["admin","collection","user","sales", "accounts", "staff", "mistry", "architect"];
+const ROLES = ["admin","collection", "laminate", "user","sales", "accounts", "staff", "mistry", "architect"];
 
 const ROLE_STYLES = {
   admin:     "bg-violet-100 text-violet-700 border-violet-200",
   collection: "bg-blue-100 text-blue-700 border-blue-200",
+  laminate:  "bg-green-100 text-green-700 border-green-200",
   user:      "bg-sky-100 text-sky-700 border-sky-200",
   sales:     "bg-green-100 text-green-700 border-green-200",
   accounts:  "bg-amber-100 text-amber-700 border-amber-200",

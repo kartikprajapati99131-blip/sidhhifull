@@ -373,7 +373,7 @@ export default function DuePaymentManager() {
 
       {/* ── Add Due Payment ── */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold text-slate-800">Add Due Payment</h2>
+        <h2 className="mb-4 text-base font-semibold text-slate-800">Add Reminder</h2>
         <form
           onSubmit={handleAddEntry}
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
@@ -393,7 +393,7 @@ export default function DuePaymentManager() {
 
           {/* Amount */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Amount (₹)</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">AMT (₹)</label>
             <input
               type="number"
               name="amount"
@@ -491,7 +491,7 @@ export default function DuePaymentManager() {
         {/* Table header / filters */}
         <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold text-slate-800">Pending Due Payments</h2>
+            <h2 className="text-base font-semibold text-slate-800">Pending Reminders</h2>
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
               {filteredEntries.length} {searchTerm || referenceFilter ? "found" : "pending"}
             </span>
@@ -566,7 +566,7 @@ export default function DuePaymentManager() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3">Name</th>
-                <th className="px-5 py-3">Amount</th>
+                <th className="px-5 py-3">AMT</th>
                 <th className="px-5 py-3">Due Date</th>
                 <th className="px-5 py-3">Mobile</th>
                 <th className="px-5 py-3">Referenced By</th>
@@ -687,7 +687,7 @@ export default function DuePaymentManager() {
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Amount (₹)</label>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">AMT (₹)</label>
                   <input type="number" name="amount" value={editForm.amount} min="0"
                     onChange={handleEditChange}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
