@@ -9,7 +9,7 @@ import PriceList from "@/models/PriceList";
 export async function PUT(request, { params }) {
   try {
     await connectDb();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const {
       companyId,

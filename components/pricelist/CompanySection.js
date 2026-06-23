@@ -12,27 +12,22 @@ const COMPANY_FIELDS = [
   { name: "companyName", label: "Company Name", required: true, placeholder: "e.g. Acme Metals Ltd." },
 ];
 
-/**
- * Props
- * ─────
- * company    : Object  (full company document)
- * searchQuery: string
- * onRefresh  : () => void
- * onToast    : (msg, type) => void
- */
 export default function CompanySection({ company, searchQuery = "", onRefresh, onToast }) {
   const [isOpen, setIsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(false);
 
+  const companyId = String(company._id);
+
   const handleEdit = async ({ companyName }) => {
     setLoadingEdit(true);
     try {
-      const res = await fetch(`/api/pricelist/company/${company._id}`, {
+      const res = await fetch(`/api/pricelist/company/${companyId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyName }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       onToast(data.message, "success");
@@ -47,7 +42,8 @@ export default function CompanySection({ company, searchQuery = "", onRefresh, o
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/pricelist/company/${company._id}`, { method: "DELETE" });
+      const res = await fetch(`/api/pricelist/company/${companyId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       onToast(data.message, "success");
@@ -96,7 +92,7 @@ export default function CompanySection({ company, searchQuery = "", onRefresh, o
       {isOpen && (
         <div className="border-t border-slate-100 px-4 pb-4 pt-3">
           <SubCategorySection
-            companyId={company._id}
+            companyId={companyId}
             subCategories={company.subCategories}
             searchQuery={searchQuery}
             onRefresh={onRefresh}

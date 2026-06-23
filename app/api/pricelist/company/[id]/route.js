@@ -3,11 +3,10 @@ import { NextResponse } from "next/server";
 import connectDb from "@/db/connectDb";
 import PriceList from "@/models/PriceList";
 
-// ── PUT /api/pricelist/company/[id] ─────────────────────────────────────────
 export async function PUT(request, { params }) {
   try {
     await connectDb();
-    const { id } = params;
+    const { id } = await params;
     const { companyName } = await request.json();
 
     if (!companyName?.trim()) {
@@ -17,7 +16,6 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Check for name collision (exclude current doc)
     const collision = await PriceList.findOne({
       companyName: companyName.trim(),
       _id: { $ne: id },
@@ -56,11 +54,10 @@ export async function PUT(request, { params }) {
   }
 }
 
-// ── DELETE /api/pricelist/company/[id] ──────────────────────────────────────
 export async function DELETE(request, { params }) {
   try {
     await connectDb();
-    const { id } = params;
+    const { id } = await params;
 
     const deleted = await PriceList.findByIdAndDelete(id);
     if (!deleted) {
