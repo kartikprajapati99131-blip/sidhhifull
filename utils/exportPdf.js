@@ -102,7 +102,7 @@ export function exportPriceListPdf(company) {
       return Number.isFinite(num) ? num.toLocaleString("en-IN") : "—";
     };
 
-    const head = [["Product Name", "Code", "Thickness", "Rate ", "Net Price ", "DP "]];
+    const head = [["Product Name", "Code", "Thickness", "Sr.No ", "Net Price ", "DP "]];
     const body = subCat.products.map((p) => [
       p.productName || "—",
       p.code || "—",

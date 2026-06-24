@@ -17,7 +17,7 @@ export async function PUT(request, { params }) {
       productName,
       code,
       thickness = "",
-      rate = 0,
+      rate = "",
       netPrice = 0,
       dp = 0,
     } = body;
@@ -53,13 +53,24 @@ export async function PUT(request, { params }) {
       );
     }
 
+    const parsedNetPrice = Number(netPrice);
+    const parsedDp = Number(dp);
+
+    if (!Number.isFinite(parsedNetPrice) || !Number.isFinite(parsedDp)) {
+      return NextResponse.json(
+        { success: false, message: "Net Price and DP must be valid numbers." },
+        { status: 400 }
+      );
+    }
+
     // Update only supplied fields
     if (productName?.trim()) product.productName = productName.trim();
     if (code?.trim())        product.code        = code.trim();
     product.thickness = thickness?.trim() ?? product.thickness;
-    product.rate      = Number(rate);
-    product.netPrice  = Number(netPrice);
-    product.dp        = Number(dp);
+    // "rate" is a Sr. No. field — letters and numbers allowed — stored as a string.
+    product.rate      = String(rate).trim();
+    product.netPrice  = parsedNetPrice;
+    product.dp        = parsedDp;
 
     await company.save();
 

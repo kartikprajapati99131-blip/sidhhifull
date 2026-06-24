@@ -10,7 +10,7 @@ const PRODUCT_FIELDS = [
   { name: "productName", label: "Product Name", required: true, placeholder: "e.g. Aluminium Sheet" },
   { name: "code",        label: "Code",         required: true, placeholder: "e.g. AL-001" },
   { name: "thickness",   label: "Thickness",    placeholder: "e.g. 2mm" },
-  { name: "rate",        label: "Rate (₹)",     type: "number", required: true, placeholder: "0" },
+  { name: "rate",        label: "Sr. No.",      required: true, placeholder: "e.g. SR-001" },
   { name: "netPrice",    label: "Net Price (₹)", type: "number", required: true, placeholder: "0" },
   { name: "dp",          label: "DP (₹)",       type: "number", required: true, placeholder: "0" },
 ];
@@ -56,19 +56,19 @@ export default function ProductTable({
         : `/api/pricelist/product`;
       const method = isEdit ? "PUT" : "POST";
 
-      // Form inputs always deliver strings, even for type="number" fields.
-      // Coerce rate/netPrice/dp to real numbers here so the database — and
-      // anything that later reads these fields (like PDF export) — gets
-      // numbers, not strings, and never silently stores NaN.
+      // Form inputs always deliver strings. netPrice/dp are true numeric
+      // fields, so coerce them here so the database — and anything that
+      // later reads these fields (like PDF export) — gets numbers, not
+      // strings, and never silently stores NaN. "rate" is now a free-text
+      // Sr. No. field (letters + numbers allowed) and is sent as-is.
       const payload = {
         ...formData,
-        rate: Number(formData.rate),
         netPrice: Number(formData.netPrice),
         dp: Number(formData.dp),
       };
 
-      if ([payload.rate, payload.netPrice, payload.dp].some((n) => !Number.isFinite(n))) {
-        throw new Error("Rate, Net Price and DP must be valid numbers.");
+      if ([payload.netPrice, payload.dp].some((n) => !Number.isFinite(n))) {
+        throw new Error("Net Price and DP must be valid numbers.");
       }
 
       const res = await fetch(url, {
@@ -128,7 +128,7 @@ export default function ProductTable({
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {["Product", "Code", "Thickness", "Rate", "Net Price", "DP", ""].map((col) => (
+                {["Product", "Code", "Thickness", "Sr. No.", "Net Price", "DP", ""].map((col) => (
                   <th key={col} className="px-3 py-2 text-left whitespace-nowrap font-medium">
                     {col}
                   </th>
@@ -148,7 +148,7 @@ export default function ProductTable({
                   <td className="px-3 py-2 text-slate-500 uppercase">
                     {product.thickness || "—"}
                   </td>
-                  <td className="px-3 py-2 text-slate-700 tabular-nums">{fmt(product.rate)}</td>
+                  <td className="px-3 py-2 text-slate-700 uppercase">{product.rate}</td>
                   <td className="px-3 py-2 text-slate-700 tabular-nums">{fmt(product.netPrice)}</td>
                   <td className="px-3 py-2 text-slate-700 tabular-nums">{fmt(product.dp)}</td>
                   <td className="px-3 py-2">

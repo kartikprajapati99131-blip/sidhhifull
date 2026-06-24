@@ -15,7 +15,7 @@ export async function POST(request) {
       productName,
       code,
       thickness = "",
-      rate = 0,
+      rate = "",
       netPrice = 0,
       dp = 0,
     } = body;
@@ -46,13 +46,24 @@ export async function POST(request) {
       );
     }
 
+    const parsedNetPrice = Number(netPrice);
+    const parsedDp = Number(dp);
+
+    if (!Number.isFinite(parsedNetPrice) || !Number.isFinite(parsedDp)) {
+      return NextResponse.json(
+        { success: false, message: "Net Price and DP must be valid numbers." },
+        { status: 400 }
+      );
+    }
+
     const newProduct = {
       productName: productName.trim(),
       code: code.trim(),
       thickness: thickness.trim(),
-      rate: Number(rate),
-      netPrice: Number(netPrice),
-      dp: Number(dp),
+      // "rate" is a Sr. No. field — letters and numbers allowed — stored as a string.
+      rate: String(rate).trim(),
+      netPrice: parsedNetPrice,
+      dp: parsedDp,
       createdAt: new Date(),
     };
 
