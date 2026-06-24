@@ -27,8 +27,10 @@ export async function GET(req) {
     const result = attendance
       .map((att) => {
         const user = userMap[att.userId];
+        const ALLOWED_ROLES = ["staff", "collection", "laminate"]; // add whichever roles you want
+
+        if (!user || !ALLOWED_ROLES.includes(user.role)) return null;
         // If user no longer exists or is not staff, skip this record
-        if (!user || user.role !== "staff") return null;
         return {
           ...att,
           userName: user.name,
