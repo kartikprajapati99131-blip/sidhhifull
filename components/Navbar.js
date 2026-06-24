@@ -133,6 +133,8 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+              
+              {/* ── ALUMINIUM role ── */}
               {isAluminium && (
                 <div className="relative">
                   <button
@@ -157,6 +159,7 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+
               {/* ── LAMINATE role ── */}
               {isLaminate && (
                 <div className="relative">
@@ -185,6 +188,7 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+
               {/* ── ACCOUNTS role ── */}
               {isAccounts && (
                 <div className="relative">
@@ -209,6 +213,7 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+
               {/* ── MISTRY role ── */}
               {isMistry && (
                 <div className="relative">
@@ -234,6 +239,7 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+
               {/* ── ADMIN role ── */}
               {isAdmin && (
                 <div className="relative" ref={dropRef}>
@@ -265,6 +271,8 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+
+              {/* ── SALES role ── */}
               {isSales && (
                 <div className="relative">
                   <button
