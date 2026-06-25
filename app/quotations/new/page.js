@@ -78,16 +78,17 @@ function calcDomal({ trackType, material, width: W, height: H, rateKg, glassRate
   return { rows, trackCost, shutterCost, interlockCost, accessoryCost, grandTotal, sqFt };
 }
 
-const DEFAULTS = {
+const HARD_DEFAULTS = {
   trackType: 2, material: 'regular',
   width: 60, height: 60,
-  rateKg: 345, glassRate: 72, labourRate: 50, otherRate: 200,
+  rateKg: 315, glassRate: 72, labourRate: 50, otherRate: 200,
   rLock: 135, rBearing: 50, rClot: 18, rRubber: 75,
 };
 
 export default function CalculatorPage() {
   const router = useRouter();
-  const [cfg, setCfg] = useState(DEFAULTS);
+  const [cfg, setCfg] = useState(HARD_DEFAULTS);
+  const [pricesLoaded, setPricesLoaded] = useState(false);
   const [client, setClient] = useState({ clientName: '', clientPhone: '', clientAddress: '', notes: '' });
   const [result, setResult] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -99,6 +100,27 @@ export default function CalculatorPage() {
 
   const set = (k, v) => setCfg(p => ({ ...p, [k]: v }));
   const num = (k) => (e) => set(k, parseFloat(e.target.value) || 0);
+
+  // Load saved prices from server on first mount
+  useEffect(() => {
+    fetch('/api/prices')
+      .then(r => r.json())
+      .then(prices => {
+        setCfg(prev => ({
+          ...prev,
+          rateKg:     prices.rateKg     ?? prev.rateKg,
+          glassRate:  prices.glassRate  ?? prev.glassRate,
+          labourRate: prices.labourRate ?? prev.labourRate,
+          otherRate:  prices.otherRate  ?? prev.otherRate,
+          rLock:      prices.rLock      ?? prev.rLock,
+          rBearing:   prices.rBearing   ?? prev.rBearing,
+          rClot:      prices.rClot      ?? prev.rClot,
+          rRubber:    prices.rRubber    ?? prev.rRubber,
+        }));
+        setPricesLoaded(true);
+      })
+      .catch(() => setPricesLoaded(true)); // fail silently, use hard defaults
+  }, []);
 
   useEffect(() => {
     setResult(calcDomal(cfg));
@@ -309,6 +331,12 @@ export default function CalculatorPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => router.push('/prices')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: '#E1F5EE', border: '1px solid #A8DFCE', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#085041' }}
+            title="Manage default prices">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            <span className="calc-header-sub">Prices</span>
+          </button>
           <button onClick={() => router.push('/quotations')}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: '#F6F5F1', border: '1px solid #E5E3DC', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#444' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>

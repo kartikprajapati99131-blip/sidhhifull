@@ -107,11 +107,18 @@ function QuotationsContent({ router }) {
             <div style={{ fontSize: 11, color: '#999', marginTop: 1 }}>{list.length} saved</div>
           </div>
         </div>
-        <button onClick={() => router.push('/quotations/new')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#1B4F8A', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => router.push('/prices')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: '#E1F5EE', border: '1px solid #A8DFCE', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#085041' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Prices
+          </button>
+          <button onClick={() => router.push('/quotations/new')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#1B4F8A', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New
+          </button>
+        </div>
       </header>
 
       <div className="ql-content" style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
