@@ -99,11 +99,10 @@ function ReferenceSelect({ value, onChange, isAdmin, references, onReferenceAdde
               setAddError("");
               setNewRef("");
             }}
-            className={`rounded-lg border px-3 py-2 text-xs font-semibold whitespace-nowrap transition ${
-              adding
-                ? "border-slate-200 bg-slate-100 text-slate-500"
-                : "border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100"
-            }`}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold whitespace-nowrap transition ${adding
+              ? "border-slate-200 bg-slate-100 text-slate-500"
+              : "border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100"
+              }`}
           >
             {adding ? "✕ Cancel" : "+ New"}
           </button>
@@ -178,10 +177,10 @@ export default function DuePaymentManager() {
       if (data.success) {
         setEntries(data.data);
       } else {
-        showToast(data.message || "Failed to load due payments", "error");
+        showToast(data.message || "Failed to load due reminders", "error");
       }
     } catch {
-      showToast("Something went wrong while loading due payments", "error");
+      showToast("Something went wrong while loading due reminders", "error");
     } finally {
       setLoading(false);
     }
@@ -238,7 +237,7 @@ export default function DuePaymentManager() {
       const data = await res.json();
 
       if (data.success) {
-        showToast("Due payment added successfully");
+        showToast("Due Reminder added successfully");
         setForm(emptyForm);
         setDuplicateWarning(null);
         fetchEntries();
@@ -260,9 +259,9 @@ export default function DuePaymentManager() {
         return;
       }
 
-      showToast(data.message || "Failed to add due payment", "error");
+      showToast(data.message || "Failed to add due reminder", "error");
     } catch {
-      showToast("Something went wrong while adding due payment", "error");
+      showToast("Something went wrong while adding due reminder", "error");
     } finally {
       setSubmitting(false);
     }
@@ -331,14 +330,14 @@ export default function DuePaymentManager() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast("Due payment updated successfully");
+        showToast("Due Reminder updated successfully");
         closeEditModal();
         fetchEntries();
       } else {
-        showToast(data.message || "Failed to update due payment", "error");
+        showToast(data.message || "Failed to update due reminder", "error");
       }
     } catch {
-      showToast("Something went wrong while updating due payment", "error");
+      showToast("Something went wrong while updating due reminder", "error");
     } finally {
       setSubmitting(false);
     }
@@ -354,7 +353,7 @@ export default function DuePaymentManager() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast("Due payment deleted successfully");
+        showToast("Due Reminder deleted successfully");
         fetchEntries();
       } else {
         showToast(data.message || "Failed to delete", "error");
@@ -393,7 +392,7 @@ export default function DuePaymentManager() {
 
           {/* Amount */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">AMT (₹)</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">AMT </label>
             <input
               type="number"
               name="amount"
@@ -584,7 +583,7 @@ export default function DuePaymentManager() {
               ) : entries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
-                    No pending due payments. Add one above.
+                    No pending due Reminders. Add one above.
                   </td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
@@ -600,7 +599,7 @@ export default function DuePaymentManager() {
                       {entry.customerName}
                     </td>
                     <td className="px-5 py-3 text-slate-700">
-                      ₹{Number(entry.amount).toLocaleString("en-IN")}
+                      {(() => { const s = String(Math.trunc(Number(entry.amount))); return s.length <= 1 ? s : s[0] + "." + s.slice(1); })()}
                     </td>
                     <td className="px-5 py-3 text-slate-700">
                       {formatDate(entry.dueDate)}
@@ -678,7 +677,7 @@ export default function DuePaymentManager() {
         editingEntry && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-              <h3 className="mb-4 text-base font-semibold text-slate-800">Edit Due Payment</h3>
+              <h3 className="mb-4 text-base font-semibold text-slate-800">Edit Reminder</h3>
               <form onSubmit={handleEditSave} className="space-y-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
@@ -765,7 +764,7 @@ export default function DuePaymentManager() {
         deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-              <h3 className="mb-2 text-base font-semibold text-slate-800">Delete Due Payment</h3>
+              <h3 className="mb-2 text-base font-semibold text-slate-800">Delete Due Reminder</h3>
               <p className="mb-5 text-sm text-slate-600">
                 Are you sure you want to delete the entry for &quot;{deleteTarget.customerName}&quot;? This cannot be undone.
               </p>

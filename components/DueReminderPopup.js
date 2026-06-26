@@ -536,7 +536,7 @@ export default function DueReminderPopup() {
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
               <h2 className="text-base font-semibold text-slate-800">
-                Today&apos;s Due Payments
+                Today&apos;s Due Reminders
               </h2>
               <p className="text-xs text-slate-500">
                 {entries.length} payment{entries.length > 1 ? "s" : ""} need attention
@@ -576,7 +576,7 @@ export default function DueReminderPopup() {
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{entry.customerName}</p>
                     <p className="text-sm text-slate-600">
-                      ₹{Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
+                      {Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
                     </p>
                     {entry.mobile && (
                       <p className="text-xs text-slate-500">{entry.mobile}</p>
