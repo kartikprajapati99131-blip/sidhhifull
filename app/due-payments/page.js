@@ -70,7 +70,7 @@ export default function DuePaymentsPage() {
       <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Payment Due Reminders</h1>
+            <h1 className="text-xl font-bold text-slate-800">Due Reminders</h1>
             <p className="text-slate-400 text-sm mt-0.5">
               {isAdmin ? "Admin" : "Collection"} · {session?.user?.name || session?.user?.email}
             </p>
