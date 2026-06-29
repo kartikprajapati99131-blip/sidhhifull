@@ -24,7 +24,7 @@ function getPriceDisplay(p) {
 export default function AllProduct({ type }) {
   const { addToCart } = useCart();
   const [products, setProducts] = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProducts();
@@ -121,34 +121,40 @@ export default function AllProduct({ type }) {
         </p>
 
         <div className="p-5 w-full max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 items-stretch">
             {products.slice(0, 10).map((p) => {
               const priceDisplay = getPriceDisplay(p);
-              // ✅ FIX: images[0].url with fallback to legacy image.url
               const imgSrc = p.images?.[0]?.url ?? p.image?.url ?? null;
 
               return (
-                <div key={p._id}>
-                  <Link href={`/detail/${p._id}`}>
-                    <div className="bg-gray-100 text-center backdrop-blur-md shadow-lg rounded-2xl p-4 hover:scale-105 transition w-full">
+                <div key={p._id} className="flex">
+                  <Link href={`/detail/${p._id}`} className="w-full">
+                    <div className="bg-gray-100 backdrop-blur-md shadow-lg rounded-2xl p-4 hover:scale-105 transition flex flex-col h-full">
 
-                      {imgSrc ? (
-                        <img
-                          src={imgSrc}
-                          alt={p.name}
-                          className="object-contain w-32 h-32 mx-auto bg-gray-200 rounded-2xl mb-4 shadow-sm"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-32 h-32 mx-auto bg-gray-200 rounded-2xl mb-4 shadow-sm flex items-center justify-center text-gray-400 text-xs">
-                          No image
-                        </div>
-                      )}
+                      {/* Image */}
+                      <div className="flex justify-center mb-3 flex-shrink-0">
+                        {imgSrc ? (
+                          <img
+                            src={imgSrc}
+                            alt={p.name}
+                            className="object-contain w-28 h-28 bg-gray-200 rounded-2xl shadow-sm"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-28 h-28 bg-gray-200 rounded-2xl shadow-sm flex items-center justify-center text-gray-400 text-xs">
+                            No image
+                          </div>
+                        )}
+                      </div>
 
-                      <h3 className="text-lg font-semibold">{p.name}</h3>
+                      {/* Name */}
+                      <h3 className="text-sm font-semibold text-center leading-snug line-clamp-2 flex-shrink-0">
+                        {p.name}
+                      </h3>
 
+                      {/* Price */}
                       {priceDisplay && (
-                        <p className="text-gray-600 text-sm font-medium">
+                        <p className="text-gray-600 text-sm font-medium text-center mt-1 flex-shrink-0">
                           {priceDisplay.label}
                           {priceDisplay.unit && (
                             <span className="text-gray-400 font-normal"> / {priceDisplay.unit}</span>
@@ -156,16 +162,11 @@ export default function AllProduct({ type }) {
                         </p>
                       )}
 
-                      <p className="text-gray-400 text-xs mt-1 line-clamp-2">
+                      {/* Description — fills remaining space */}
+                      <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 mt-1.5 flex-grow">
                         {p.description}
                       </p>
 
-                      <button
-                        onClick={(e) => { e.preventDefault(); handleAddToCart(p); }}
-                        className="mt-2 border border-gray-50 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
-                      >
-                        Add to Cart
-                      </button>
                     </div>
                   </Link>
                 </div>

@@ -40,6 +40,7 @@ const productSchema = new mongoose.Schema(
         "Handle",
         "Hinges",
         "Wood",
+        "RoseHandle",
       ],
       required: true,
     },

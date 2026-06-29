@@ -145,16 +145,14 @@ export default function ShopClient({ initialProducts, selectedType }) {
                       <div
                         key={brand._id}
                         onClick={() => handleBrandClick(brand)}
-                        className={`flex flex-col items-center gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-1 ${
-                          isInactive ? "opacity-25 pointer-events-none" : ""
-                        }`}
+                        className={`flex flex-col items-center gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-1 ${isInactive ? "opacity-25 pointer-events-none" : ""
+                          }`}
                       >
                         <div
-                          className={`w-[120px] h-[120px] sm:w-[92px] sm:h-[92px] rounded-3xl sm:rounded-2xl border-2 bg-white flex items-center justify-center overflow-hidden transition-all ${
-                            isActive
+                          className={`w-[120px] h-[120px] sm:w-[92px] sm:h-[92px] rounded-3xl sm:rounded-2xl border-2 bg-white flex items-center justify-center overflow-hidden transition-all ${isActive
                               ? "border-[#1a1814] shadow-[0_0_0_4px_rgba(26,24,20,0.08)]"
                               : "border-[#e4ddd3] hover:border-[#b8956a] hover:shadow-[0_8px_25px_rgba(184,149,106,0.15)]"
-                          }`}
+                            }`}
                         >
                           {brand.logo?.url ? (
                             <img src={brand.logo.url} alt={brand.name} className="w-full h-full object-contain p-3" />
@@ -163,9 +161,8 @@ export default function ShopClient({ initialProducts, selectedType }) {
                           )}
                         </div>
                         <span
-                          className={`text-[13px] font-semibold max-w-[120px] sm:max-w-[92px] sm:text-xs text-center leading-snug whitespace-nowrap overflow-hidden text-ellipsis ${
-                            isActive ? "text-[#1a1814]" : "text-[#5a5248]"
-                          }`}
+                          className={`text-[13px] font-semibold max-w-[120px] sm:max-w-[92px] sm:text-xs text-center leading-snug whitespace-nowrap overflow-hidden text-ellipsis ${isActive ? "text-[#1a1814]" : "text-[#5a5248]"
+                            }`}
                         >
                           {brand.name}
                         </span>
@@ -208,11 +205,10 @@ export default function ShopClient({ initialProducts, selectedType }) {
             {activeBrand.subCategories?.length > 0 && (
               <div className="flex gap-2 flex-wrap justify-center mx-auto mb-6 px-5 max-w-[700px]">
                 <button
-                  className={`px-4 py-[5px] rounded-full text-[12.5px] font-medium border cursor-pointer transition-all ${
-                    !activeSubCat
+                  className={`px-4 py-[5px] rounded-full text-[12.5px] font-medium border cursor-pointer transition-all ${!activeSubCat
                       ? "bg-[#1a1814] text-[#faf8f5] border-[#1a1814]"
                       : "border-[#e4ddd3] bg-[#faf8f5] text-[#7a6a5a] hover:border-[#b8956a] hover:text-[#b8956a]"
-                  }`}
+                    }`}
                   onClick={() => setActiveSubCat(null)}
                 >
                   All
@@ -220,11 +216,10 @@ export default function ShopClient({ initialProducts, selectedType }) {
                 {activeBrand.subCategories.map((s) => (
                   <button
                     key={s}
-                    className={`px-4 py-[5px] rounded-full text-[12.5px] font-medium border cursor-pointer transition-all ${
-                      activeSubCat === s
+                    className={`px-4 py-[5px] rounded-full text-[12.5px] font-medium border cursor-pointer transition-all ${activeSubCat === s
                         ? "bg-[#1a1814] text-[#faf8f5] border-[#1a1814]"
                         : "border-[#e4ddd3] bg-[#faf8f5] text-[#7a6a5a] hover:border-[#b8956a] hover:text-[#b8956a]"
-                    }`}
+                      }`}
                     onClick={() => setActiveSubCat((prev) => (prev === s ? null : s))}
                   >
                     {s}
@@ -257,45 +252,59 @@ export default function ShopClient({ initialProducts, selectedType }) {
                 const coverImage = getCoverImage(p);
 
                 return (
-                  <div key={p._id}>
-                    <Link href={`/detail/${p._id}`}>
-                      <div className="bg-gray-100 text-center backdrop-blur-md shadow-lg rounded-2xl p-4 hover:scale-105 transition w-full">
-                        {coverImage ? (
-                          <img
-                            src={coverImage}
-                            alt={`${p.name} — ${selectedType || p.type} — SIDDHI`}
-                            className="object-contain w-32 h-32 mx-auto bg-gray-200 rounded-2xl mb-4 shadow-sm"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-32 h-32 mx-auto bg-gray-200 rounded-2xl mb-4 shadow-sm flex items-center justify-center text-gray-400 text-xs">
-                            No image
-                          </div>
-                        )}
+                  <div key={p._id} className="flex">
+                    <Link href={`/detail/${p._id}`} className="w-full">
+                      <div className="bg-gray-100 backdrop-blur-md shadow-lg rounded-2xl p-4 hover:scale-105 transition flex flex-col h-full">
 
-                        <h3 className="text-lg font-semibold">{p.name}</h3>
+                        {/* Image */}
+                        <div className="flex justify-center mb-3 flex-shrink-0">
+                          {coverImage ? (
+                            <img
+                              src={coverImage}
+                              alt={`${p.name} — ${selectedType || p.type} — SIDDHI`}
+                              className="object-contain w-28 h-28 bg-gray-200 rounded-2xl shadow-sm"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-28 h-28 bg-gray-200 rounded-2xl shadow-sm flex items-center justify-center text-gray-400 text-xs">
+                              No image
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Name */}
+                        <h3 className="text-sm font-semibold text-center leading-snug line-clamp-2 flex-shrink-0">
+                          {p.name}
+                        </h3>
 
                         {/* Brand badge */}
                         {p.brand && (
-                          <p className="text-xs text-amber-700 bg-amber-50 rounded-full px-2 py-0.5 inline-block mt-1 font-medium">
-                            {p.brand}
-                          </p>
+                          <div className="flex justify-center mt-1 flex-shrink-0">
+                            <span className="text-xs text-amber-700 bg-amber-50 rounded-full px-2 py-0.5 font-medium truncate max-w-full">
+                              {p.brand}
+                            </span>
+                          </div>
                         )}
 
+                        {/* Variant pills */}
                         {hasVariants && (
-                          <div className="flex flex-wrap justify-center gap-1 mt-2">
-                            {p.variants.slice(0, 4).map((v, i) => (
-                              <span key={i} className="text-xs bg-white border border-gray-300 rounded-full px-2 py-0.5 text-gray-600">
+                          <div className="flex flex-wrap justify-center gap-1 mt-1.5 flex-shrink-0">
+                            {p.variants.slice(0, 3).map((v, i) => (
+                              <span key={i} className="text-xs bg-white border border-gray-300 rounded-full px-2 py-0.5 text-gray-600 truncate max-w-[70px]">
                                 {v.label}
                               </span>
                             ))}
-                            {p.variants.length > 4 && (
-                              <span className="text-xs text-gray-400 px-1">+{p.variants.length - 4} more</span>
+                            {p.variants.length > 3 && (
+                              <span className="text-xs text-gray-400 px-1">+{p.variants.length - 3}</span>
                             )}
                           </div>
                         )}
 
-                        <p className="text-gray-400 text-xs mt-1 line-clamp-2">{p.description}</p>
+                        {/* Description — fills remaining space */}
+                        <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 mt-1.5 flex-grow">
+                          {p.description}
+                        </p>
+
                       </div>
                     </Link>
                   </div>

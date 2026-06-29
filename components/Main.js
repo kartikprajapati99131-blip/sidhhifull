@@ -41,8 +41,8 @@ const Main = () => {
                             <div className="grid max-md:grid-cols-2 md:grid-cols-3 gap-10  mx-auto mt-5">
                                 {[
                                     { name: "Lock", role: "Door-Lock", src: "/Product/lock.png", href: "/shop?type=Lock" },
-                                    { name: "Handle", role: "Door-Lock", src: "/Product/Handle.png", href: "/shop?type=Handle" },
-                                    { name: "Hinges", role: "Hinges", src: "/Product/hingis.png", href: "/shop?type=Hinges" },
+                                    { name: "Handle", role: "Handle", src: "/Product/Handle.png", href: "/shop?type=Handle" },
+                                    { name: "Rose Handle", role: "Rose Handle", src: "/Product/rose-handle.jpg", href: "/shop?type=RoseHandle" },
                                     { name: "Wood", role: "Wood", src: "/Product/wood.png", href: "/shop?type=Wood" },
                                 ].map((member, i) => (
                                     <Link key={i} href={member.href}>

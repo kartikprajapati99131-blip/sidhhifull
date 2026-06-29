@@ -22,13 +22,13 @@ const TYPE_VARIANT_CONFIG = {
   Hardware:         { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
   AluminiumSection: { mode: "variants", unit: "piece", presets: ["1 inch","1.5 inch","2 inch","3 inch"],                          placeholder: "e.g. 2 inch"    },
   Lock:             { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
-  Hinges:           { mode: "variants", unit: "piece", presets: ["2 inch","3 inch","4 inch","5 inch"],                            placeholder: "e.g. 3 inch"    },
+  RoseHandle:       { mode: "simple",   unit: "piece", presets: [],                                                               placeholder: ""                },
 };
 
 const TYPE_LABELS = {
   Plywood: "Plywood", Wood: "Wood", Handle: "Handle", Glass: "Glass",
   Laminate: "Laminate", UPVC: "UPVC", Hardware: "Hardware",
-  AluminiumSection: "Aluminium Section", Lock: "Lock", Hinges: "Hinges",
+  AluminiumSection: "Aluminium Section", Lock: "Lock", RoseHandle: "Rose Handle",
 };
 
 const PRODUCT_TYPES = Object.keys(TYPE_VARIANT_CONFIG);

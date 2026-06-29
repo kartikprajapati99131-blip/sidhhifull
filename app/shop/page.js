@@ -16,7 +16,7 @@ const COVER_MAP = {
   AluminiumSection: { src: "/covers/AllumimiumCover.png", alt: "Aluminium sections — SIDDHI Palanpur" },
   Lock: { src: "/covers/LockCover.png", alt: "Lock products — SIDDHI Palanpur" },
   Handle: { src: "/covers/handleCover.png", alt: "Door handles — SIDDHI Palanpur" },
-  Hinges: { src: "/covers/hingesCover.png", alt: "Hinges — SIDDHI Palanpur" },
+  RoseHandle: { src: "/covers/RoseCover.png", alt: "Rose handles — SIDDHI Palanpur" },
   Wood: { src: "/covers/woodCover.png", alt: "Wood products — SIDDHI Palanpur" },
 };
 
@@ -30,7 +30,7 @@ const TYPE_LABEL = {
   AluminiumSection: "Aluminium Section",
   Lock: "Lock",
   Handle: "Handle",
-  Hinges: "Hinges",
+  RoseHandle: "Rose Handle",
   Wood: "Wood",
 };
 

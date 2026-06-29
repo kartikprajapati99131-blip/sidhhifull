@@ -13,7 +13,7 @@ const BrandSchema = new mongoose.Schema(
       required: true,
       enum: [
         "Plywood","Wood","Handle","Glass","Laminate",
-        "UPVC","Hardware","AluminiumSection","Lock","Hinges",
+        "UPVC","Hardware","AluminiumSection","Lock","RoseHandle",
       ],
     },
     logo: {

@@ -18,7 +18,7 @@ const PRODUCT_TYPES = [
   { value: "Hardware",         label: "Hardware"          },
   { value: "AluminiumSection", label: "Aluminium Section" },
   { value: "Lock",             label: "Lock"              },
-  { value: "Hinges",           label: "Hinges"            },
+  { value: "RoseHandle",       label: "Rose Handle"            },
 ];
 
 const EMPTY_FORM = {
