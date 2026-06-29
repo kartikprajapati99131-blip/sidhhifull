@@ -29,22 +29,29 @@ export async function POST(req) {
       }
     }
 
-    // Validate that at least one pricing method exists
-    const hasBasePrice = body.price !== undefined && body.price !== "";
-    const hasVariants = Array.isArray(body.variants) && body.variants.length > 0;
-
-    if (!hasBasePrice && !hasVariants) {
-      return Response.json(
-        { success: false, message: "Provide a base price or at least one variant." },
-        { status: 400 }
-      );
+    // Validate variants only if provided — variant-mode types enforce
+    // this on the frontend already; simple-mode types intentionally
+    // send no variants at all.
+    if (body.variants) {
+      if (!Array.isArray(body.variants)) {
+        return Response.json(
+          { success: false, message: "Variants must be an array." },
+          { status: 400 }
+        );
+      }
+      for (const v of body.variants) {
+        if (!v.label) {
+          return Response.json(
+            { success: false, message: "Each variant needs a label." },
+            { status: 400 }
+          );
+        }
+      }
     }
 
-    // Clean up: if using variants, clear the top-level price
-    if (hasVariants) {
-      delete body.price;
-      delete body.priceUnit;
-    }
+    // Price is not part of this product model — strip it if it ever shows up
+    delete body.price;
+    delete body.priceUnit;
 
     // Sanitize tags — only allow known values
     const ALLOWED_TAGS = ["best_seller", "featured", "new_arrival"];
