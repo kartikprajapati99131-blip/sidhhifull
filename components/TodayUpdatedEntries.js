@@ -19,16 +19,6 @@ function formatTime(date) {
   });
 }
 
-function isWithinDays(date, days) {
-  if (!date) return false;
-  const d = new Date(date);
-  const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(now.getDate() - days + 1);
-  cutoff.setHours(0, 0, 0, 0);
-  return d >= cutoff;
-}
-
 // Used when the user picks an explicit From/To range.
 // `from` / `to` are "YYYY-MM-DD" strings from <input type="date">.
 function isWithinRange(date, from, to) {
@@ -65,7 +55,8 @@ function getDayLabel(date) {
   const now = new Date();
   const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
   if (diffDays === 1) return "Yesterday";
-  return `${diffDays} days ago`;
+  if (diffDays > 1) return `${diffDays} days ago`;
+  return formatDate(date);
 }
 
 // Determine the activity type and its timestamp for a pending entry
@@ -92,6 +83,27 @@ const TYPE_META = {
   "collected":  { label: "✅ Payment collected",         bg: "bg-emerald-50", text: "text-emerald-700" },
 };
 
+// Human-friendly labels for raw schema field names shown in the change log.
+const FIELD_LABELS = {
+  customerName: "Name",
+  amount: "Amount",
+  dueDate: "Due Date",
+  note: "Note",
+  mobile: "Mobile",
+  mobile2: "Mobile 2",
+  referencedBy: "Referenced By",
+};
+
+const DATE_FIELDS = new Set(["dueDate"]);
+const AMOUNT_FIELDS = new Set(["amount"]);
+
+function formatChangeValue(field, value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (DATE_FIELDS.has(field)) return formatDate(value);
+  if (AMOUNT_FIELDS.has(field)) return `₹${Number(value).toLocaleString("en-IN")}`;
+  return String(value);
+}
+
 export default function TodayUpdatedEntries() {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,8 +111,8 @@ export default function TodayUpdatedEntries() {
   const [filter, setFilter] = useState("all");
 
   // ── Date range filter ──
-  // Empty strings = no explicit range chosen, so we fall back to the
-  // default "last 4 days" view.
+  // Empty strings = no range chosen, so we show everything (all-time) by
+  // default instead of only the last few days.
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -122,13 +134,26 @@ export default function TodayUpdatedEntries() {
       const list = [];
 
       // ── Pending entries: edits, follow-ups, new adds ──
-      // NOTE: we no longer restrict to the last 4 days here — everything is
-      // fetched, and the 4-day (or custom range) filtering happens in
-      // `filtered` below so the date picker can look further back too.
       if (pendingData.success) {
         for (const entry of pendingData.data) {
           const activity = getPendingActivity(entry);
           if (!activity) continue;
+
+          // For "edited" activity, pull the exact field-level changes that
+          // happened at this timestamp so we can show old → new detail
+          // instead of a generic "Fields updated" line.
+          let changes = [];
+          if (activity.type === "edited" && Array.isArray(entry.editHistory)) {
+            const activityTime = activity.time.getTime();
+            changes = entry.editHistory
+              .filter((h) => new Date(h.changedAt).getTime() === activityTime)
+              .map((h) => ({
+                field: h.field,
+                label: FIELD_LABELS[h.field] || h.field,
+                oldValue: formatChangeValue(h.field, h.oldValue),
+                newValue: formatChangeValue(h.field, h.newValue),
+              }));
+          }
 
           list.push({
             _id: entry._id + "_" + activity.type,
@@ -142,6 +167,7 @@ export default function TodayUpdatedEntries() {
             updatedDueDate: entry.updatedDueDate,
             dueDate: entry.dueDate,
             note: entry.note,
+            changes,
           });
         }
       }
@@ -185,7 +211,7 @@ export default function TodayUpdatedEntries() {
   const filtered = activities.filter((a) => {
     if (filter !== "all" && a.type !== filter) return false;
     if (hasCustomRange) return isWithinRange(a.time, dateFrom, dateTo);
-    return isWithinDays(a.time, 4); // default view when no range chosen
+    return true; // default: show all-time activity
   });
 
   const todayCount = activities.filter((a) => isToday(a.time)).length;
@@ -200,10 +226,9 @@ export default function TodayUpdatedEntries() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-800">Today's Updates</h2>
+          <h2 className="text-base font-semibold text-slate-800">All Updates</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            All activity — edits, follow-ups, new entries, collections
-            {hasCustomRange ? "" : " (last 4 days)"}
+            Every change — edits, follow-ups, new entries, collections
           </p>
         </div>
         <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
@@ -234,7 +259,7 @@ export default function TodayUpdatedEntries() {
         ))}
       </div>
 
-      {/* Date range picker */}
+      {/* Date range picker — optional narrowing, everything shows by default */}
       <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-slate-100">
         <label className="text-xs text-slate-500">From</label>
         <input
@@ -288,7 +313,7 @@ export default function TodayUpdatedEntries() {
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                  No activity {hasCustomRange ? "in the selected range" : "in the last 4 days"}.
+                  No activity {hasCustomRange ? "in the selected range" : "yet"}.
                 </td>
               </tr>
             ) : (
@@ -327,7 +352,7 @@ export default function TodayUpdatedEntries() {
                     </td>
 
                     {/* Details */}
-                    <td className="px-5 py-3 text-slate-600 text-xs max-w-[220px]">
+                    <td className="px-5 py-3 text-slate-600 text-xs max-w-[260px]">
                       {a.type === "collected" && (
                         <span className="space-y-0.5 block">
                           <span className="block">
@@ -349,7 +374,19 @@ export default function TodayUpdatedEntries() {
                         </span>
                       )}
                       {a.type === "edited" && (
-                        <span className="text-slate-500">Fields updated</span>
+                        a.changes && a.changes.length > 0 ? (
+                          <span className="block space-y-1">
+                            {a.changes.map((c, i) => (
+                              <span key={i} className="block">
+                                <span className="font-medium text-slate-700">{c.label}:</span>{" "}
+                                <span className="text-slate-400 line-through">{c.oldValue}</span>{" "}
+                                <span className="text-slate-700">→ {c.newValue}</span>
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">Fields updated</span>
+                        )
                       )}
                       {a.type === "added" && (
                         <span className="text-slate-500">Due: {formatDate(a.dueDate)}</span>

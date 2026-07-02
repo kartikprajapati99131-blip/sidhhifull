@@ -290,10 +290,67 @@ function WhatsAppReminderSender({ entries }) {
   );
 }
 
-export default function DueReminderPopup() {
+// ── Reusable reminder entry card (used both inline and in the popup sheet) ──
+function EntryCard({ entry, onEdit, onFollowUp, onOnsite }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-800">{entry.customerName}</p>
+        <p className="text-sm text-slate-600">
+          ₹{Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
+        </p>
+        {entry.mobile && (
+          <p className="text-xs text-slate-500">{entry.mobile}</p>
+        )}
+        {entry.referencedBy && (
+          <span className="mt-1 inline-block rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+            {entry.referencedBy}
+          </span>
+        )}
+        {entry.note && (
+          <p className="mt-1 break-words text-xs italic text-slate-500">{entry.note}</p>
+        )}
+      </div>
+
+      {/* Actions — 2-col grid on mobile for full-width, easy-to-tap buttons */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <button
+          onClick={() => onEdit(entry)}
+          className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5"
+        >
+          Edit
+        </button>
+        <a href={`tel:${entry.mobile}`} className="contents">
+          <button className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5">
+            Call
+          </button>
+        </a>
+        <button
+          onClick={() => onFollowUp(entry)}
+          className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 sm:py-1.5"
+        >
+          Done Calling
+        </button>
+        <button
+          onClick={() => onOnsite(entry)}
+          className="rounded-md bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 sm:py-1.5"
+        >
+          On-site
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// `inlineMode`: renders the reminder list directly inside the page (used by
+// the "Today's Reminders" tab) instead of as a popup/overlay.
+export default function DueReminderPopup({ inlineMode = false }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [visible, setVisible] = useState(false);
+  // Auto-popup starts collapsed (a small pill) so it never covers the whole
+  // screen on first load — the user taps it to see the full list.
+  const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const { data: session } = useSession();
@@ -554,114 +611,9 @@ export default function DueReminderPopup() {
     }
   };
 
-  if (loading || !visible || entries.length === 0) return <Toast toast={toast} />;
-
-  return (
+  // Shared modals — used both in inline mode and popup mode.
+  const modals = (
     <>
-      <Toast toast={toast} />
-
-      {/* Main popup — bottom sheet on mobile, centered dialog on sm+ */}
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:px-4">
-        <div className="flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-h-[85vh] sm:max-w-2xl sm:rounded-xl">
-          {/* Drag handle for mobile bottom-sheet feel */}
-          <div className="flex justify-center pt-2 sm:hidden">
-            <span className="h-1 w-10 rounded-full bg-slate-200" />
-          </div>
-
-          {/* Header */}
-          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
-            <div className="min-w-0">
-              <h2 className="truncate text-base font-semibold text-slate-800">
-                Today&apos;s Due Reminders
-              </h2>
-              <p className="text-xs text-slate-500">
-                {entries.length} payment{entries.length > 1 ? "s" : ""} need attention
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {isAdmin && (
-                <button
-                  onClick={handleExportPDF}
-                  className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 sm:px-3"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                  <span className="hidden xs:inline sm:inline">Export PDF</span>
-                </button>
-              )}
-              <button
-                onClick={() => setVisible(false)}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          {/* Entries list */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-            <div className="space-y-3">
-              {entries.map((entry) => (
-                <div
-                  key={entry._id}
-                  className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{entry.customerName}</p>
-                    <p className="text-sm text-slate-600">
-                      ₹{Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
-                    </p>
-                    {entry.mobile && (
-                      <p className="text-xs text-slate-500">{entry.mobile}</p>
-                    )}
-                    {entry.referencedBy && (
-                      <span className="mt-1 inline-block rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
-                        {entry.referencedBy}
-                      </span>
-                    )}
-                    {entry.note && (
-                      <p className="mt-1 break-words text-xs italic text-slate-500">{entry.note}</p>
-                    )}
-                  </div>
-
-                  {/* Actions — 2-col grid on mobile for full-width, easy-to-tap buttons */}
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                    <button
-                      onClick={() => openEditModal(entry)}
-                      className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5"
-                    >
-                      Edit
-                    </button>
-                    <a href={`tel:${entry.mobile}`} className="contents">
-                      <button className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5">
-                        Call
-                      </button>
-                    </a>
-                    <button
-                      onClick={() => openFollowUpModal(entry)}
-                      className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 sm:py-1.5"
-                    >
-                      Done Calling
-                    </button>
-                    <button
-                      onClick={() => openOnsiteModal(entry)}
-                      className="rounded-md bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 sm:py-1.5"
-                    >
-                      On-site
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── WhatsApp reminder sender ── */}
-          {isAdmin && <WhatsAppReminderSender entries={entries} />}
-        </div>
-      </div>
-
       {/* Edit Modal */}
       {editingEntry && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
@@ -769,6 +721,180 @@ export default function DueReminderPopup() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  // ─────────────────────────────────────────────────────────────────
+  // INLINE MODE — used inside the "Today's Reminders" tab. No overlay,
+  // no popup chrome, just the content sitting in the page.
+  // ─────────────────────────────────────────────────────────────────
+  if (inlineMode) {
+    return (
+      <>
+        <Toast toast={toast} />
+        {loading ? (
+          <p className="py-6 text-center text-sm text-slate-500">Loading reminders...</p>
+        ) : entries.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500">
+            No due or overdue payments for today. 🎉
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">
+                {entries.length} payment{entries.length > 1 ? "s" : ""} need attention
+              </p>
+              {isAdmin && (
+                <button
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 sm:px-3"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Export PDF
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {entries.map((entry) => (
+                <EntryCard
+                  key={entry._id}
+                  entry={entry}
+                  onEdit={openEditModal}
+                  onFollowUp={openFollowUpModal}
+                  onOnsite={openOnsiteModal}
+                />
+              ))}
+            </div>
+
+            {isAdmin && (
+              <div className="-mx-6 -mb-6 rounded-b-2xl">
+                <WhatsAppReminderSender entries={entries} />
+              </div>
+            )}
+          </div>
+        )}
+        {modals}
+      </>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // AUTO-POPUP MODE (page load) — starts as a small collapsed pill so
+  // it never takes over the whole screen. Tapping it opens a sheet
+  // capped at 70% of the viewport height, with the rest of the page
+  // still visible underneath.
+  // ─────────────────────────────────────────────────────────────────
+  if (loading || !visible || entries.length === 0) return <Toast toast={toast} />;
+
+  const totalAmount = entries.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  return (
+    <>
+      <Toast toast={toast} />
+
+      {!expanded ? (
+        // Collapsed pill — no dark backdrop, background stays fully usable.
+        <div className="fixed bottom-4 inset-x-4 z-50 flex justify-center sm:inset-x-auto sm:right-5 sm:justify-end">
+          <button
+            onClick={() => setExpanded(true)}
+            className="flex max-w-full items-center gap-2 rounded-full bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-indigo-700"
+          >
+            <span>🔔</span>
+            <span className="truncate">
+              {entries.length} due today &middot; ₹{totalAmount.toLocaleString("en-IN")}
+            </span>
+            <span
+              onClick={(e) => { e.stopPropagation(); setVisible(false); }}
+              role="button"
+              aria-label="Dismiss"
+              className="ml-1 shrink-0 rounded-full px-1 text-indigo-200 hover:text-white"
+            >
+              ✕
+            </span>
+          </button>
+        </div>
+      ) : (
+        // Expanded sheet — capped height (never full screen) with a
+        // lighter backdrop; tapping outside or "Minimize" collapses it
+        // back to the pill instead of losing the reminders.
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:px-4"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="flex max-h-[70vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-h-[80vh] sm:max-w-2xl sm:rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle for mobile bottom-sheet feel */}
+            <div className="flex justify-center pt-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-slate-200" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-slate-800">
+                  Today&apos;s Due Reminders
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {entries.length} payment{entries.length > 1 ? "s" : ""} need attention
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {isAdmin && (
+                  <button
+                    onClick={handleExportPDF}
+                    className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 sm:px-3"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    <span className="hidden xs:inline sm:inline">Export PDF</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setExpanded(false)}
+                  className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Minimize"
+                  title="Minimize"
+                >
+                  ▾
+                </button>
+                <button
+                  onClick={() => setVisible(false)}
+                  className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Entries list */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="space-y-3">
+                {entries.map((entry) => (
+                  <EntryCard
+                    key={entry._id}
+                    entry={entry}
+                    onEdit={openEditModal}
+                    onFollowUp={openFollowUpModal}
+                    onOnsite={openOnsiteModal}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* ── WhatsApp reminder sender ── */}
+            {isAdmin && <WhatsAppReminderSender entries={entries} />}
+          </div>
+        </div>
+      )}
+
+      {modals}
     </>
   );
 }

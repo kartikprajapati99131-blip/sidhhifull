@@ -140,7 +140,7 @@ export default function RecoveredSummary() {
   const [allCompleted, setAllCompleted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("today");
+  const [filter, setFilter] = useState("all");
 
   const fetchCompleted = useCallback(async () => {
     setLoading(true);

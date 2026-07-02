@@ -140,13 +140,23 @@ export async function PUT(request, { params }) {
     }
 
     // ── Regular edit ──
+    // Every changed field is logged into editHistory (old -> new, same
+    // timestamp) so the Updates screen can show exactly what was changed,
+    // instead of just a generic "Fields updated" badge.
+    const now = new Date();
     let changed = false;
 
+    const logChange = (field, oldValue, newValue) => {
+      existingEntry.editHistory.push({ field, oldValue, newValue, changedAt: now });
+    };
+
     if (customerName !== undefined && customerName.trim() !== existingEntry.customerName) {
+      logChange("customerName", existingEntry.customerName, customerName.trim());
       existingEntry.customerName = customerName.trim();
       changed = true;
     }
     if (amount !== undefined && Number(amount) !== existingEntry.amount) {
+      logChange("amount", existingEntry.amount, Number(amount));
       existingEntry.amount = Number(amount);
       changed = true;
     }
@@ -159,17 +169,34 @@ export async function PUT(request, { params }) {
           previousDueDate: existingEntry.dueDate,
           newDueDate: newDate,
         });
+        logChange("dueDate", existingEntry.dueDate, newDate);
         existingEntry.dueDate = newDate;
-        existingEntry.lastDueDateChangeAt = new Date();
+        existingEntry.lastDueDateChangeAt = now;
         changed = true;
       }
     }
-    if (note !== undefined) existingEntry.note = note;
-    if (mobile !== undefined) existingEntry.mobile = mobile;
-    if (mobile2 !== undefined) existingEntry.mobile2 = mobile2;
-    if (referencedBy !== undefined) existingEntry.referencedBy = referencedBy;
+    if (note !== undefined && note !== existingEntry.note) {
+      logChange("note", existingEntry.note, note);
+      existingEntry.note = note;
+      changed = true;
+    }
+    if (mobile !== undefined && mobile !== existingEntry.mobile) {
+      logChange("mobile", existingEntry.mobile, mobile);
+      existingEntry.mobile = mobile;
+      changed = true;
+    }
+    if (mobile2 !== undefined && mobile2 !== existingEntry.mobile2) {
+      logChange("mobile2", existingEntry.mobile2, mobile2);
+      existingEntry.mobile2 = mobile2;
+      changed = true;
+    }
+    if (referencedBy !== undefined && referencedBy !== existingEntry.referencedBy) {
+      logChange("referencedBy", existingEntry.referencedBy, referencedBy);
+      existingEntry.referencedBy = referencedBy;
+      changed = true;
+    }
 
-    existingEntry.lastEditedAt = new Date();
+    existingEntry.lastEditedAt = now;
 
     await existingEntry.save();
 

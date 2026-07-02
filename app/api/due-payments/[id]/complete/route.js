@@ -9,8 +9,9 @@ import mongoose from "mongoose";
 //         accountStatus: "closed"|"continue", remainingAmount: number }
 //
 // If accountStatus === "closed":
-//   - Deletes the entry entirely (no completed record is kept, any
-//     shortfall is written off along with the row itself)
+//   - Saves this entry as completed (with amountGiven collected). Any
+//     shortfall is written off, but the record is KEPT so it always shows
+//     up in the Recovered page and Updates history.
 //
 // If accountStatus === "continue":
 //   - Saves this entry as completed (with amountGiven collected)
@@ -60,21 +61,10 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // ── Closed account: purge all data instead of keeping a record ──
-    if (accountStatus === "closed") {
-      await DuePayment.findByIdAndDelete(id);
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Account cleared — all data for this customer has been removed",
-          data: null,
-          newEntry: null,
-        },
-        { status: 200 }
-      );
-    }
-
-    // ── Continue: keep a completed record + spin off a new pending entry ──
+    // ── Both "closed" and "continue" now keep a completed record ──
+    // Previously "closed" accounts were deleted outright, which meant they
+    // never appeared in the Recovered page or the Updates history. Now every
+    // completion is saved as status "completed" so it always shows up.
     const originalAmount = existingEntry.amount;
 
     existingEntry.status = "completed";
@@ -82,14 +72,17 @@ export async function PUT(request, { params }) {
     existingEntry.paymentMethod = paymentMethod;
     existingEntry.amountGiven = Number(amountGiven);
     existingEntry.accountStatus = accountStatus;
-    existingEntry.remainingAmount = Number(remainingAmount);
+    existingEntry.remainingAmount = accountStatus === "closed" ? 0 : Number(remainingAmount);
     existingEntry.originalAmount = originalAmount;
 
     await existingEntry.save();
 
     let newEntry = null;
 
-    if (remainingAmount > 0) {
+    // Only "continue" spins off a new pending entry for the remaining amount.
+    // "closed" is fully done — nothing left to chase, but the record stays
+    // in history for reference.
+    if (accountStatus === "continue" && remainingAmount > 0) {
       newEntry = await DuePayment.create({
         customerName: existingEntry.customerName,
         amount: Number(remainingAmount),
@@ -103,7 +96,10 @@ export async function PUT(request, { params }) {
     return NextResponse.json(
       {
         success: true,
-        message: `Partial payment recorded. New entry created for ₹${remainingAmount} remaining.`,
+        message:
+          accountStatus === "closed"
+            ? `Account closed. ₹${Number(amountGiven).toLocaleString("en-IN")} collected and saved to Recovered.`
+            : `Partial payment recorded. New entry created for ₹${remainingAmount} remaining.`,
         data: existingEntry,
         newEntry,
       },

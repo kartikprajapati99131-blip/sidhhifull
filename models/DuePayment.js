@@ -38,8 +38,19 @@ const DuePaymentSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Track regular edits — used by TodayUpdatedEntries for 4-day "edited" badge
+    // Track regular edits — used by TodayUpdatedEntries for the "edited" badge
     lastEditedAt: { type: Date, default: null },
+
+    // Full field-by-field edit trail (old value -> new value) so the
+    // Updates screen can show exactly what changed, not just "Fields updated".
+    editHistory: [
+      {
+        field: { type: String },
+        oldValue: { type: mongoose.Schema.Types.Mixed },
+        newValue: { type: mongoose.Schema.Types.Mixed },
+        changedAt: { type: Date, default: Date.now },
+      },
+    ],
 
     // Completion details
     completedAt: { type: Date, default: null },
