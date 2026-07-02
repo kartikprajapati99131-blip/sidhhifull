@@ -804,7 +804,7 @@ export default function DueReminderPopup({ inlineMode = false }) {
           >
             <span>🔔</span>
             <span className="truncate">
-              {entries.length} due today &middot; ₹{totalAmount.toLocaleString("en-IN")}
+              {entries.length} due today
             </span>
             <span
               onClick={(e) => { e.stopPropagation(); setVisible(false); }}
