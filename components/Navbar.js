@@ -10,6 +10,8 @@ export default function Navbar() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [staffOpen, setStaffOpen] = useState(false);
   const [mistryOpen, setMistryOpen] = useState(false);
+  const [subAdminOpen, setSubAdminOpen] = useState(false);
+  
   const dropRef = useRef(null);
 
   const isAdmin = session?.user?.role === "admin";
@@ -21,6 +23,7 @@ export default function Navbar() {
   const isCollection = session?.user?.role === "collection";
   const isLaminate = session?.user?.role === "laminate";
   const isAluminium = session?.user?.role === "aluminium";
+  const isSubAdmin = session?.user?.role === "subadmin";
 
   const adminSections = [
     {
@@ -133,7 +136,35 @@ export default function Navbar() {
                   )}
                 </div>
               )}
-              
+              {/* ── SUBADMIN role ── */}
+              {isSubAdmin && (
+                <div className="relative">
+                  <button
+                    onClick={() => setSubAdminOpen((v) => !v)}
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white text-[12px] font-semibold shadow shadow-purple-200 hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-200" />
+                    Sub Admin
+                    <ChevronDown size={13} className={`transition-transform duration-200 ${subAdminOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {subAdminOpen && (
+                    <DropPanel onClose={() => setSubAdminOpen(false)}>
+                      {[
+                        { href: "/customer", label: "Customer lead", dot: "bg-sky-500" },
+                        { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
+                        { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
+                        { href: "/allrewiew", label: "Reviews", dot: "bg-rose-500" },
+                        { href: "/question", label: "Questions", dot: "bg-slate-400" },
+                      ].map((it) => (
+                        <DropLink key={it.href} {...it} close={() => setSubAdminOpen(false)} />
+                      ))}
+                      <div className="h-px bg-slate-100 mx-2 my-1" />
+                      <SignOutRow />
+                    </DropPanel>
+                  )}
+                </div>
+              )}
               {/* ── ALUMINIUM role ── */}
               {isAluminium && (
                 <div className="relative">
@@ -323,7 +354,7 @@ export default function Navbar() {
                   )}
                 </div>
               )}
-              
+
 
             </div>
           )}

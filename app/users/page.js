@@ -1,25 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { sub } from "framer-motion/client";
 
-const ROLES = ["admin","aluminium","collection", "laminate", "user","sales", "accounts", "staff", "mistry", "architect"];
+const ROLES = ["admin", "subadmin", "aluminium", "collection", "laminate", "user", "sales", "accounts", "staff", "mistry", "architect"];
 
 const ROLE_STYLES = {
-  admin:     "bg-violet-100 text-violet-700 border-violet-200",
+  admin: "bg-violet-100 text-violet-700 border-violet-200",
+  subadmin: "bg-violet-100 text-violet-700 border-violet-200",
   aluminium: "bg-gray-100 text-gray-700 border-gray-200",
   collection: "bg-blue-100 text-blue-700 border-blue-200",
-  laminate:  "bg-green-100 text-green-700 border-green-200",
-  user:      "bg-sky-100 text-sky-700 border-sky-200",
-  sales:     "bg-green-100 text-green-700 border-green-200",
-  accounts:  "bg-amber-100 text-amber-700 border-amber-200",
-  staff:     "bg-emerald-100 text-emerald-700 border-emerald-200",
-  mistry:    "bg-amber-100 text-amber-700 border-amber-200",
+  laminate: "bg-green-100 text-green-700 border-green-200",
+  user: "bg-sky-100 text-sky-700 border-sky-200",
+  sales: "bg-green-100 text-green-700 border-green-200",
+  accounts: "bg-amber-100 text-amber-700 border-amber-200",
+  staff: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  mistry: "bg-amber-100 text-amber-700 border-amber-200",
   architect: "bg-rose-100 text-rose-700 border-rose-200",
 };
 
 function Avatar({ name }) {
   const initials = name?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() || "?";
-  const colors = ["bg-violet-500","bg-sky-500","bg-emerald-500","bg-amber-500","bg-rose-500","bg-indigo-500"];
+  const colors = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-indigo-500"];
   const color = colors[name?.charCodeAt(0) % colors.length] || colors[0];
   return (
     <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
@@ -93,13 +95,12 @@ function PointsModal({ user, onClose, onSuccess }) {
                 <button
                   key={p}
                   onClick={() => setPoints(String(p))}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                    points === String(p)
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${points === String(p)
                       ? "bg-gray-900 text-white border-gray-900"
                       : p > 0
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                      : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
-                  }`}
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                    }`}
                 >
                   {p > 0 ? `+${p}` : p}
                 </button>
@@ -284,11 +285,10 @@ export default function UsersPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
             <button
               onClick={() => setFilterRole("all")}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                filterRole === "all"
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${filterRole === "all"
                   ? "bg-gray-900 text-white border-gray-900"
                   : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-              }`}
+                }`}
             >
               All
             </button>
@@ -296,11 +296,10 @@ export default function UsersPage() {
               <button
                 key={r}
                 onClick={() => setFilterRole(r)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border capitalize transition-all ${
-                  filterRole === r
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border capitalize transition-all ${filterRole === r
                     ? "bg-gray-900 text-white border-gray-900"
                     : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                }`}
+                  }`}
               >
                 {r}
               </button>
@@ -331,9 +330,8 @@ export default function UsersPage() {
                       <p className="text-xs text-gray-400 truncate">{user.email}</p>
                     </div>
                     <span
-                      className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border capitalize ${
-                        ROLE_STYLES[user.role] || "bg-gray-100 text-gray-600 border-gray-200"
-                      }`}
+                      className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border capitalize ${ROLE_STYLES[user.role] || "bg-gray-100 text-gray-600 border-gray-200"
+                        }`}
                     >
                       {user.role}
                     </span>

@@ -475,7 +475,6 @@ function FilterPills({ filters, onRemove }) {
 }
 
 // ── Search Panel ──────────────────────────────────────────────────────────────
-// ── Search Panel ──────────────────────────────────────────────────────────────
 function SearchPanel({ isAdmin, categories, onCategoryAdded }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
@@ -839,9 +838,6 @@ function BirthdaysToday({ isAdmin, categories, onCategoryAdded }) {
     async function load() {
       setLoading(true);
       try {
-        // Fetch all customers with birthDate, then filter by today's month+day on client
-        // (MongoDB doesn't easily query month/day without aggregation)
-        // We fetch in batches — for large DBs consider a dedicated API endpoint
         const today = new Date();
         const mm = today.getMonth() + 1;
         const dd = today.getDate();
@@ -855,7 +851,6 @@ function BirthdaysToday({ isAdmin, categories, onCategoryAdded }) {
           all = [...all, ...(data.customers || [])];
           if (all.length >= data.total || !data.customers?.length) hasMore = false;
           else page++;
-          // Safety: don't loop more than 50 pages
           if (page > 50) break;
         }
 
@@ -1762,8 +1757,16 @@ function AddForm({ isAdmin, userEmail, categories, onCategoryAdded }) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
+// subadmin has the exact same tab set as admin
 const TABS = {
   admin: [
+    { key: "add", label: "Add Customer" },
+    { key: "search", label: "All Customers" },
+    { key: "birthdays", label: "🎂 Birthdays" },
+    { key: "bulksend", label: "📨 Send by Category" },
+    { key: "export", label: "Export" },
+  ],
+  subadmin: [
     { key: "add", label: "Add Customer" },
     { key: "search", label: "All Customers" },
     { key: "birthdays", label: "🎂 Birthdays" },
@@ -1789,6 +1792,11 @@ export default function AddCustomerPage() {
 
   const role = session?.user?.role;
   const isAdmin = role === "admin";
+  const isSubAdmin = role === "subadmin";
+  // Sub admin gets everything admin gets in THIS component.
+  // (Recovered-amount visibility, if you want it admin-only, lives in your
+  // due-payments module — gate that one spot with `isAdmin` only, not this flag.)
+  const hasFullAccess = isAdmin || isSubAdmin;
 
   useEffect(() => {
     fetch("/api/categories")
@@ -1810,9 +1818,20 @@ export default function AddCustomerPage() {
     );
   }
 
-  if (!session || (role !== "admin" && role !== "accounts" && role !== "sales")) return <NotFoundPage />;
+  if (!session || (role !== "admin" && role !== "subadmin" && role !== "accounts" && role !== "sales")) {
+    return <NotFoundPage />;
+  }
 
   const tabs = TABS[role] || TABS.accounts;
+
+  const roleLabel = isAdmin ? "Admin" : isSubAdmin ? "Sub Admin" : role === "sales" ? "Sales" : "Accounts";
+  const roleBadgeCls = isAdmin
+    ? "bg-sky-50 text-sky-600 border-sky-200"
+    : isSubAdmin
+      ? "bg-purple-50 text-purple-600 border-purple-200"
+      : role === "sales"
+        ? "bg-amber-50 text-amber-600 border-amber-200"
+        : "bg-violet-50 text-violet-600 border-violet-200";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1822,13 +1841,11 @@ export default function AddCustomerPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Customer Management</h1>
             <p className="text-slate-400 text-sm mt-0.5">
-              {isAdmin ? "Admin" : role === "sales" ? "Sales" : "Accounts"} · {session?.user?.name || session?.user?.email}
+              {roleLabel} · {session?.user?.name || session?.user?.email}
             </p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isAdmin ? "bg-sky-50 text-sky-600 border-sky-200"
-            : role === "sales" ? "bg-amber-50 text-amber-600 border-amber-200"
-              : "bg-violet-50 text-violet-600 border-violet-200"}`}>
-            {isAdmin ? "Admin" : role === "sales" ? "Sales" : "Accounts"}
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${roleBadgeCls}`}>
+            {roleLabel}
           </span>
         </div>
       </div>
@@ -1847,11 +1864,11 @@ export default function AddCustomerPage() {
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
-        {tab === "add" && <AddForm isAdmin={isAdmin} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
-        {tab === "search" && <SearchPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
-        {tab === "birthdays" && <BirthdaysToday isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
-        {tab === "bulksend" && <SendByCategoryPanel isAdmin={isAdmin} categories={categories} onCategoryAdded={handleCategoryAdded} />}
-        {tab === "export" && isAdmin && <ExportBar categories={categories} />}
+        {tab === "add" && <AddForm isAdmin={hasFullAccess} userEmail={session?.user?.email} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "search" && <SearchPanel isAdmin={hasFullAccess} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "birthdays" && <BirthdaysToday isAdmin={hasFullAccess} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "bulksend" && <SendByCategoryPanel isAdmin={hasFullAccess} categories={categories} onCategoryAdded={handleCategoryAdded} />}
+        {tab === "export" && hasFullAccess && <ExportBar categories={categories} />}
       </div>
     </div>
   );

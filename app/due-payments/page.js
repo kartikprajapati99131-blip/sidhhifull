@@ -30,11 +30,18 @@ function Spinner({ size = 16 }) {
   );
 }
 
+// subadmin gets everything admin gets EXCEPT "recovered"
 const TABS = {
   admin: [
     { key: "due",       label: "💳 All Reminders" },
     { key: "today",     label: "📋 Today's Updates" },
     { key: "recovered", label: "✅ Recovered" },
+    { key: "reminder",  label: "🔔 Today's Reminders" },
+    { key: "noanswer",  label: "🚫 No Answer" },
+  ],
+  subadmin: [
+    { key: "due",       label: "💳 All Reminders" },
+    { key: "today",     label: "📋 Today's Updates" },
     { key: "reminder",  label: "🔔 Today's Reminders" },
     { key: "noanswer",  label: "🚫 No Answer" },
   ],
@@ -49,8 +56,9 @@ export default function DuePaymentsPage() {
   const { data: session, status } = useSession();
   const [tab, setTab] = useState("due");
 
-  const role    = session?.user?.role;
-  const isAdmin = role === "admin";
+  const role       = session?.user?.role;
+  const isAdmin    = role === "admin";
+  const isSubAdmin = role === "subadmin";
 
   if (status === "loading") {
     return (
@@ -63,9 +71,18 @@ export default function DuePaymentsPage() {
     );
   }
 
-  if (!session || (role !== "admin" && role !== "collection")) return <NotFoundPage />;
+  if (!session || (role !== "admin" && role !== "subadmin" && role !== "collection")) {
+    return <NotFoundPage />;
+  }
 
   const tabs = TABS[role] || TABS.collection;
+
+  const roleLabel = isAdmin ? "Admin" : isSubAdmin ? "Sub Admin" : "Collection";
+  const roleBadgeCls = isAdmin
+    ? "bg-sky-50 text-sky-600 border-sky-200"
+    : isSubAdmin
+      ? "bg-purple-50 text-purple-600 border-purple-200"
+      : "bg-violet-50 text-violet-600 border-violet-200";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -75,15 +92,11 @@ export default function DuePaymentsPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Due Reminders</h1>
             <p className="text-slate-400 text-sm mt-0.5">
-              {isAdmin ? "Admin" : "Collection"} · {session?.user?.name || session?.user?.email}
+              {roleLabel} · {session?.user?.name || session?.user?.email}
             </p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-            isAdmin
-              ? "bg-sky-50 text-sky-600 border-sky-200"
-              : "bg-violet-50 text-violet-600 border-violet-200"
-          }`}>
-            {isAdmin ? "Admin" : "Collection"}
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${roleBadgeCls}`}>
+            {roleLabel}
           </span>
         </div>
       </div>
@@ -108,7 +121,7 @@ export default function DuePaymentsPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
         {tab === "due"       && <DuePaymentManager />}
         {tab === "today"     && <TodayUpdatedEntries />}
-        {tab === "recovered" && <RecoveredPayments />}
+        {tab === "recovered" && isAdmin && <RecoveredPayments />}
         {tab === "noanswer"  && <NoAnswerList />}
         {tab === "reminder"  && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">

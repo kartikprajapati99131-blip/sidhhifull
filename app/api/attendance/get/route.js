@@ -10,6 +10,11 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
 
+  const noCacheHeaders = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+  };
+
   // Admin view — no userId param
   if (!userId) {
     await requireAdmin();
@@ -40,10 +45,10 @@ export async function GET(req) {
       })
       .filter(Boolean); // remove nulls
 
-    return Response.json(result);
+    return Response.json(result, { headers: noCacheHeaders });
   }
 
   // Individual user view
   const attendance = await Attendance.find({ userId }).lean();
-  return Response.json(attendance);
+  return Response.json(attendance, { headers: noCacheHeaders });
 }

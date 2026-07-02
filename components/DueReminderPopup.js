@@ -17,7 +17,7 @@ function Toast({ toast }) {
   const isError = toast.type === "error";
   return (
     <div
-      className={`fixed bottom-5 right-5 z-[110] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg transition-all ${isError ? "bg-red-600" : "bg-emerald-600"}`}
+      className={`fixed bottom-4 left-4 right-4 z-[110] rounded-lg px-4 py-3 text-center text-sm font-medium text-white shadow-lg transition-all sm:left-auto sm:right-5 sm:bottom-5 sm:w-auto sm:text-left ${isError ? "bg-red-600" : "bg-emerald-600"}`}
       role="status"
     >
       {toast.message}
@@ -26,7 +26,7 @@ function Toast({ toast }) {
 }
 
 const WA_ICON = (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
   </svg>
 );
@@ -88,16 +88,16 @@ function WhatsAppReminderSender({ entries }) {
   const allDone = sentSet.size === withMobile.length;
 
   return (
-    <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+    <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
       {/* Template row */}
       <div className="mb-3">
-        <div className="mb-1.5 flex items-center justify-between">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            WhatsApp Message Template
+            WhatsApp Template
           </p>
           <button
             onClick={() => setShowCustomise((s) => !s)}
-            className="text-xs font-medium text-sky-500 transition hover:text-sky-700"
+            className="shrink-0 text-xs font-medium text-sky-500 transition hover:text-sky-700"
           >
             {showCustomise ? "Done" : "Customise"}
           </button>
@@ -106,7 +106,7 @@ function WhatsAppReminderSender({ entries }) {
           <textarea
             value={msgTemplate}
             onChange={(e) => setMsgTemplate(e.target.value)}
-            rows={2}
+            rows={3}
             className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         ) : (
@@ -116,7 +116,7 @@ function WhatsAppReminderSender({ entries }) {
         )}
         <p className="mt-1 text-xs text-slate-400">
           Use <code className="rounded bg-slate-100 px-1">{"{name}"}</code> and{" "}
-          <code className="rounded bg-slate-100 px-1">{"{amount}"}</code> — replaced per entry
+          <code className="rounded bg-slate-100 px-1">{"{amount}"}</code>
         </p>
       </div>
 
@@ -130,7 +130,7 @@ function WhatsAppReminderSender({ entries }) {
             />
           </div>
 
-          <div className="px-4 py-3">
+          <div className="px-3 py-3 sm:px-4">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
                 Step-by-Step Sender
@@ -156,7 +156,7 @@ function WhatsAppReminderSender({ entries }) {
                 </p>
                 <button
                   onClick={() => setSenderOpen(false)}
-                  className="mt-3 rounded-lg bg-green-500 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-green-600"
+                  className="mt-3 w-full rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600 sm:w-auto"
                 >
                   Done
                 </button>
@@ -164,14 +164,16 @@ function WhatsAppReminderSender({ entries }) {
             ) : (
               <>
                 <div className="mb-3 rounded-lg border border-green-100 bg-white px-3 py-2.5">
-                  <p className="text-sm font-semibold text-slate-800">
+                  <p className="break-words text-sm font-semibold text-slate-800">
                     {sentSet.has(stepIdx) && <span className="mr-1 text-green-500">✓</span>}
                     {current.customerName}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-400">
                     +91 {current.mobile} &middot; ₹{Number(current.amount).toLocaleString("en-IN")}
                   </p>
-                  <p className="mt-1.5 text-xs italic text-slate-500">"{buildMsg(current)}"</p>
+                  <p className="mt-1.5 break-words text-xs italic text-slate-500">
+                    "{buildMsg(current)}"
+                  </p>
                 </div>
 
                 <div className="mb-3 flex flex-wrap justify-center gap-1">
@@ -190,29 +192,30 @@ function WhatsAppReminderSender({ entries }) {
                   ))}
                 </div>
 
-                <div className="flex gap-2">
+                {/* Primary action — full width, always reachable with thumb */}
+                <a
+                  href={`https://wa.me/91${current.mobile}?text=${encodeURIComponent(buildMsg(current))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setSentSet((prev) => new Set([...prev, stepIdx]))}
+                  className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-600"
+                >
+                  {WA_ICON}
+                  {sentSet.has(stepIdx) ? "Open Again" : "Open WhatsApp"}
+                </a>
+
+                {/* Prev / Next — secondary, side by side */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={goPrev}
                     disabled={stepIdx === 0}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-30"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-30"
                   >
                     ← Prev
                   </button>
-
-                  <a
-                    href={`https://wa.me/91${current.mobile}?text=${encodeURIComponent(buildMsg(current))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setSentSet((prev) => new Set([...prev, stepIdx]))}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-green-600"
-                  >
-                    {WA_ICON}
-                    {sentSet.has(stepIdx) ? "Open Again" : "Open WhatsApp"}
-                  </a>
-
                   <button
                     onClick={goNext}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
                   >
                     {stepIdx === withMobile.length - 1 ? "Finish" : "Next →"}
                   </button>
@@ -220,7 +223,7 @@ function WhatsAppReminderSender({ entries }) {
 
                 {!sentSet.has(stepIdx) && (
                   <p className="mt-2 text-center text-xs text-green-600">
-                    Click "Open WhatsApp" → send the message → come back → click Next →
+                    Open WhatsApp → send → come back → Next →
                   </p>
                 )}
                 {sentSet.has(stepIdx) && stepIdx < withMobile.length - 1 && (
@@ -235,18 +238,19 @@ function WhatsAppReminderSender({ entries }) {
       )}
 
       {/* Bottom action bar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2">
         {!senderOpen && (
           <button
             onClick={startSender}
-            className="flex items-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-600"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-600 sm:w-auto"
           >
             {WA_ICON}
             Send All ({withMobile.length}) — Step by Step
           </button>
         )}
 
-        <div className="flex flex-wrap gap-1.5">
+        {/* Individual quick links — horizontal scroll on mobile instead of cramped wrap */}
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {withMobile.map((e, i) => (
             <a
               key={e._id}
@@ -254,7 +258,7 @@ function WhatsAppReminderSender({ entries }) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setSentSet((prev) => new Set([...prev, i]))}
-              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+              className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
                 sentSet.has(i)
                   ? "border-green-300 bg-green-100 text-green-700"
                   : "border-green-200 bg-white text-green-700 hover:bg-green-50"
@@ -266,21 +270,21 @@ function WhatsAppReminderSender({ entries }) {
           ))}
         </div>
 
-        <div className="mx-0.5 hidden h-5 w-px bg-slate-200 sm:block" />
-
-        <button
-          onClick={copyNumbers}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
-        >
-          📋 Copy Numbers
-        </button>
-        <button
-          onClick={copyMessages}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
-        >
-          📝 Copy Messages
-        </button>
-        {copied && <span className="text-xs font-semibold text-emerald-600">✓ Copied!</span>}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={copyNumbers}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+          >
+            📋 Copy Numbers
+          </button>
+          <button
+            onClick={copyMessages}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+          >
+            📝 Copy Messages
+          </button>
+          {copied && <span className="text-xs font-semibold text-emerald-600">✓ Copied!</span>}
+        </div>
       </div>
     </div>
   );
@@ -556,28 +560,34 @@ export default function DueReminderPopup() {
     <>
       <Toast toast={toast} />
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-        <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl">
+      {/* Main popup — bottom sheet on mobile, centered dialog on sm+ */}
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:px-4">
+        <div className="flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-h-[85vh] sm:max-w-2xl sm:rounded-xl">
+          {/* Drag handle for mobile bottom-sheet feel */}
+          <div className="flex justify-center pt-2 sm:hidden">
+            <span className="h-1 w-10 rounded-full bg-slate-200" />
+          </div>
+
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold text-slate-800">
                 Today&apos;s Due Reminders
               </h2>
               <p className="text-xs text-slate-500">
                 {entries.length} payment{entries.length > 1 ? "s" : ""} need attention
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {isAdmin && (
                 <button
                   onClick={handleExportPDF}
-                  className="flex items-center gap-1.5 rounded-md bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 sm:px-3"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
-                  Export PDF
+                  <span className="hidden xs:inline sm:inline">Export PDF</span>
                 </button>
               )}
               <button
@@ -591,17 +601,17 @@ export default function DueReminderPopup() {
           </div>
 
           {/* Entries list */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             <div className="space-y-3">
               {entries.map((entry) => (
                 <div
                   key={entry._id}
-                  className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{entry.customerName}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{entry.customerName}</p>
                     <p className="text-sm text-slate-600">
-                      {Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
+                      ₹{Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
                     </p>
                     {entry.mobile && (
                       <p className="text-xs text-slate-500">{entry.mobile}</p>
@@ -612,30 +622,32 @@ export default function DueReminderPopup() {
                       </span>
                     )}
                     {entry.note && (
-                      <p className="mt-1 text-xs italic text-slate-500">{entry.note}</p>
+                      <p className="mt-1 break-words text-xs italic text-slate-500">{entry.note}</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+
+                  {/* Actions — 2-col grid on mobile for full-width, easy-to-tap buttons */}
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                     <button
                       onClick={() => openEditModal(entry)}
-                      className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5"
                     >
                       Edit
                     </button>
-                    <a href={`tel:${entry.mobile}`}>
-                      <button className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                    <a href={`tel:${entry.mobile}`} className="contents">
+                      <button className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5">
                         Call
                       </button>
                     </a>
                     <button
                       onClick={() => openFollowUpModal(entry)}
-                      className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                      className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 sm:py-1.5"
                     >
                       Done Calling
                     </button>
                     <button
                       onClick={() => openOnsiteModal(entry)}
-                      className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                      className="rounded-md bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 sm:py-1.5"
                     >
                       On-site
                     </button>
@@ -652,8 +664,11 @@ export default function DueReminderPopup() {
 
       {/* Edit Modal */}
       {editingEntry && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
+          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-xl">
+            <div className="flex justify-center pb-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-slate-200" />
+            </div>
             <h3 className="mb-4 text-base font-semibold text-slate-800">Edit Due Payment</h3>
             <form onSubmit={handleEditSave} className="space-y-3">
               <div>
@@ -676,13 +691,13 @@ export default function DueReminderPopup() {
                 <textarea name="note" value={editForm.note} onChange={handleEditChange} rows={2}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeEditModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                  className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 sm:w-auto sm:py-2">
                   {submitting ? "Saving..." : "Save Changes"}
                 </button>
               </div>
@@ -693,10 +708,13 @@ export default function DueReminderPopup() {
 
       {/* Follow Up Modal (call reschedule) */}
       {followUpEntry && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
+          <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-xl">
+            <div className="flex justify-center pb-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-slate-200" />
+            </div>
             <h3 className="mb-1 text-base font-semibold text-slate-800">Schedule Next Follow Up</h3>
-            <p className="mb-4 text-sm text-slate-600">
+            <p className="mb-4 truncate text-sm text-slate-600">
               {followUpEntry.customerName} &middot; ₹{Number(followUpEntry.amount).toLocaleString("en-IN")}
             </p>
             <form onSubmit={handleFollowUpSave} className="space-y-3">
@@ -705,13 +723,13 @@ export default function DueReminderPopup() {
                 <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeFollowUpModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                  className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 sm:w-auto sm:py-2">
                   {submitting ? "Saving..." : "Save"}
                 </button>
               </div>
@@ -722,10 +740,13 @@ export default function DueReminderPopup() {
 
       {/* On-site Reschedule Modal */}
       {onsiteEntry && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
+          <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-xl">
+            <div className="flex justify-center pb-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-slate-200" />
+            </div>
             <h3 className="mb-1 text-base font-semibold text-slate-800">On-site Reschedule</h3>
-            <p className="mb-4 text-sm text-slate-600">
+            <p className="mb-4 truncate text-sm text-slate-600">
               {onsiteEntry.customerName} &middot; ₹{Number(onsiteEntry.amount).toLocaleString("en-IN")}
             </p>
             <form onSubmit={handleOnsiteSave} className="space-y-3">
@@ -734,13 +755,13 @@ export default function DueReminderPopup() {
                 <input type="date" value={onsiteDate} onChange={(e) => setOnsiteDate(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeOnsiteModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60">
+                  className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto sm:py-2">
                   {submitting ? "Saving..." : "Save"}
                 </button>
               </div>
