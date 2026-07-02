@@ -10,7 +10,6 @@ const OFFICE = {
   lng: 72.4329712,
 };
 
-// ✅ Tightened to 50 meters — covers building, not the street outside
 const ALLOWED_RADIUS = 50;
 
 // ─────────────────────────────────────────────

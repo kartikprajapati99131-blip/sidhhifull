@@ -33,6 +33,8 @@ export default function UserAttendancePage() {
                         entryTime: record.entryTime?.$date || record.entryTime,
                         exitTime: record.exitTime?.$date || record.exitTime,
                         totalHours: record.totalHours,
+                        remark: record.remark || "",
+                        exitAddedByAdmin: !!record.exitAddedByAdmin,
                     });
                 });
 
@@ -205,27 +207,51 @@ export default function UserAttendancePage() {
                                                             {day.sessions.map((s, i) => (
                                                                 <div
                                                                     key={i}
-                                                                    className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5"
+                                                                    className="flex flex-col bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5"
                                                                 >
-                                                                    <div className="flex items-center gap-1.5 text-sm">
-                                                                        <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-                                                                        <span className="font-semibold text-gray-800">
-                                                                            {formatTime(s.entryTime)}
-                                                                        </span>
-                                                                        <span className="text-gray-300 mx-1">→</span>
-                                                                        <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
-                                                                        <span className="font-semibold text-gray-800">
-                                                                            {formatTime(s.exitTime)}
-                                                                        </span>
+                                                                    {/* Time range + hours badge */}
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center gap-1.5 text-sm">
+                                                                            <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                                                                            <span className="font-semibold text-gray-800">
+                                                                                {formatTime(s.entryTime)}
+                                                                            </span>
+                                                                            <span className="text-gray-300 mx-1">→</span>
+                                                                            <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
+                                                                            <span className="font-semibold text-gray-800">
+                                                                                {formatTime(s.exitTime)}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {/* Admin badge, shown next to the hours pill */}
+                                                                            {s.exitAddedByAdmin && (
+                                                                                <span className="text-[10px] font-semibold px-2 py-1 rounded-full text-amber-700 bg-amber-50 border border-amber-100">
+                                                                                    🛠 Admin
+                                                                                </span>
+                                                                            )}
+
+                                                                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                                                                s.totalHours
+                                                                                    ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
+                                                                                    : "text-amber-600 bg-amber-50 border border-amber-100"
+                                                                            }`}>
+                                                                                {s.totalHours ? formatHours(s.totalHours) : "In progress"}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
 
-                                                                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                                                        s.totalHours
-                                                                            ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
-                                                                            : "text-amber-600 bg-amber-50 border border-amber-100"
-                                                                    }`}>
-                                                                        {s.totalHours ? formatHours(s.totalHours) : "In progress"}
-                                                                    </span>
+                                                                    {/* Remark, only when exit was added by admin */}
+                                                                    {s.exitAddedByAdmin && (
+                                                                        <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                                                                            <span className="mt-px">📝</span>
+                                                                            <span>
+                                                                                {s.remark
+                                                                                    ? s.remark
+                                                                                    : "Exit added by admin (no remark given)"}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ))}
                                                         </div>

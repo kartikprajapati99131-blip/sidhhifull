@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 
 const TYPES = [
   "Laminate", "Plywood", "Glass", "UPVC", "Hardware",
-  "AluminiumSection", "Lock", "Handle", "Hinges", "Wood",
+  "AluminiumSection", "Lock", "Handle", "RoseHandle", "Wood",
 ];
 
 const UNITS = ["sqft", "sheet", "piece", "meter", "kg", "box", "set"];
