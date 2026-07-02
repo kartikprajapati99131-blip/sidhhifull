@@ -29,6 +29,24 @@ function isWithinDays(date, days) {
   return d >= cutoff;
 }
 
+// Used when the user picks an explicit From/To range.
+// `from` / `to` are "YYYY-MM-DD" strings from <input type="date">.
+function isWithinRange(date, from, to) {
+  if (!date) return false;
+  const d = new Date(date);
+  if (from) {
+    const fromD = new Date(from);
+    fromD.setHours(0, 0, 0, 0);
+    if (d < fromD) return false;
+  }
+  if (to) {
+    const toD = new Date(to);
+    toD.setHours(23, 59, 59, 999);
+    if (d > toD) return false;
+  }
+  return true;
+}
+
 function isToday(date) {
   if (!date) return false;
   const d = new Date(date);
@@ -60,7 +78,7 @@ function getPendingActivity(entry) {
   const times = [
     followUpTime && { type: "follow-up", time: followUpTime },
     editTime && { type: "edited", time: editTime },
-    addedTime && isToday(addedTime) && { type: "added", time: addedTime },
+    addedTime && { type: "added", time: addedTime },
   ].filter(Boolean);
 
   if (!times.length) return null;
@@ -80,6 +98,12 @@ export default function TodayUpdatedEntries() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
 
+  // ── Date range filter ──
+  // Empty strings = no explicit range chosen, so we fall back to the
+  // default "last 4 days" view.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -97,12 +121,14 @@ export default function TodayUpdatedEntries() {
 
       const list = [];
 
-      // ── Pending entries: edits, follow-ups, new adds (last 4 days) ──
+      // ── Pending entries: edits, follow-ups, new adds ──
+      // NOTE: we no longer restrict to the last 4 days here — everything is
+      // fetched, and the 4-day (or custom range) filtering happens in
+      // `filtered` below so the date picker can look further back too.
       if (pendingData.success) {
         for (const entry of pendingData.data) {
           const activity = getPendingActivity(entry);
           if (!activity) continue;
-          if (!isWithinDays(activity.time, 4)) continue;
 
           list.push({
             _id: entry._id + "_" + activity.type,
@@ -120,10 +146,10 @@ export default function TodayUpdatedEntries() {
         }
       }
 
-      // ── Completed entries: collections (last 4 days) ──
+      // ── Completed entries: collections ──
       if (completedData.success) {
         for (const entry of completedData.data) {
-          if (!entry.completedAt || !isWithinDays(entry.completedAt, 4)) continue;
+          if (!entry.completedAt) continue;
 
           list.push({
             _id: entry._id + "_collected",
@@ -154,12 +180,20 @@ export default function TodayUpdatedEntries() {
     fetchAll();
   }, [fetchAll]);
 
-  const filtered =
-    filter === "all"
-      ? activities
-      : activities.filter((a) => a.type === filter);
+  const hasCustomRange = Boolean(dateFrom || dateTo);
+
+  const filtered = activities.filter((a) => {
+    if (filter !== "all" && a.type !== filter) return false;
+    if (hasCustomRange) return isWithinRange(a.time, dateFrom, dateTo);
+    return isWithinDays(a.time, 4); // default view when no range chosen
+  });
 
   const todayCount = activities.filter((a) => isToday(a.time)).length;
+
+  const clearRange = () => {
+    setDateFrom("");
+    setDateTo("");
+  };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -168,7 +202,8 @@ export default function TodayUpdatedEntries() {
         <div>
           <h2 className="text-base font-semibold text-slate-800">Today's Updates</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            All activity — edits, follow-ups, new entries, collections (last 4 days)
+            All activity — edits, follow-ups, new entries, collections
+            {hasCustomRange ? "" : " (last 4 days)"}
           </p>
         </div>
         <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
@@ -199,6 +234,32 @@ export default function TodayUpdatedEntries() {
         ))}
       </div>
 
+      {/* Date range picker */}
+      <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-slate-100">
+        <label className="text-xs text-slate-500">From</label>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        />
+        <label className="text-xs text-slate-500">To</label>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        />
+        {hasCustomRange && (
+          <button
+            onClick={clearRange}
+            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
+          >
+            Clear ✕
+          </button>
+        )}
+      </div>
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[750px] text-left text-sm">
@@ -227,7 +288,7 @@ export default function TodayUpdatedEntries() {
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                  No activity in the last 4 days.
+                  No activity {hasCustomRange ? "in the selected range" : "in the last 4 days"}.
                 </td>
               </tr>
             ) : (

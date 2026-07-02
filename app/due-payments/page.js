@@ -6,6 +6,7 @@ import DuePaymentManager  from "@/components/DuePaymentManager";
 import DueReminderPopup   from "@/components/DueReminderPopup";
 import TodayUpdatedEntries from "@/components/TodayUpdatedEntries";
 import RecoveredPayments  from "@/components/RecoveredSummary";
+import NoAnswerList       from "@/components/NoAnswerList";
 
 function NotFoundPage() {
   return (
@@ -35,10 +36,12 @@ const TABS = {
     { key: "today",     label: "📋 Today's Updates" },
     { key: "recovered", label: "✅ Recovered" },
     { key: "reminder",  label: "🔔 Today's Reminders" },
+    { key: "noanswer",  label: "🚫 No Answer" },
   ],
   collection: [
     { key: "due",       label: "💳 All Reminders" },
     { key: "reminder",  label: "🔔 Reminders" },
+    { key: "noanswer",  label: "🚫 No Answer" },
   ],
 };
 
@@ -106,6 +109,7 @@ export default function DuePaymentsPage() {
         {tab === "due"       && <DuePaymentManager />}
         {tab === "today"     && <TodayUpdatedEntries />}
         {tab === "recovered" && <RecoveredPayments />}
+        {tab === "noanswer"  && <NoAnswerList />}
         {tab === "reminder"  && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <h3 className="font-bold text-slate-700 mb-1 flex items-center gap-2">

@@ -35,8 +35,6 @@ const DEFAULT_TEMPLATE =
   "Hi {name}, this is a reminder that ₹{amount} is due. Please arrange payment at your earliest convenience. Thank you!";
 
 // ── WhatsApp step-through sender for due-payment reminders ──────────────────
-// Mirrors the BirthdayWAFooter / BulkWAFooter pattern used in the customer
-// module, adapted for {name} + {amount} placeholders.
 function WhatsAppReminderSender({ entries }) {
   const [msgTemplate, setMsgTemplate] = useState(DEFAULT_TEMPLATE);
   const [showCustomise, setShowCustomise] = useState(false);
@@ -307,6 +305,9 @@ export default function DueReminderPopup() {
   const [followUpEntry, setFollowUpEntry] = useState(null);
   const [followUpDate, setFollowUpDate] = useState("");
 
+  const [onsiteEntry, setOnsiteEntry] = useState(null);
+  const [onsiteDate, setOnsiteDate] = useState("");
+
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -344,7 +345,6 @@ export default function DueReminderPopup() {
 
   // ---- Export PDF ----
   const handleExportPDF = async () => {
-    // Dynamically import to avoid SSR issues
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
 
@@ -358,8 +358,7 @@ export default function DueReminderPopup() {
 
     const totalAmount = entries.reduce((sum, e) => sum + Number(e.amount), 0);
 
-    // Header
-    doc.setFillColor(79, 70, 229); // indigo-600
+    doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, 210, 28, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
@@ -369,8 +368,7 @@ export default function DueReminderPopup() {
     doc.setFont("helvetica", "normal");
     doc.text(`Generated on ${today}`, 14, 21);
 
-    // Summary box
-    doc.setFillColor(238, 242, 255); // indigo-50
+    doc.setFillColor(238, 242, 255);
     doc.roundedRect(14, 33, 182, 16, 3, 3, "F");
     doc.setFontSize(9);
     doc.setTextColor(79, 70, 229);
@@ -382,7 +380,6 @@ export default function DueReminderPopup() {
       42
     );
 
-    // Table
     autoTable(doc, {
       startY: 55,
       head: [["#", "Customer Name", "Mobile", "Amount (Rs.)", "Due Date", "Note"]],
@@ -416,7 +413,6 @@ export default function DueReminderPopup() {
       margin: { left: 14, right: 14 },
     });
 
-    // Footer
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -494,7 +490,7 @@ export default function DueReminderPopup() {
     }
   };
 
-  // ----- Follow Up -----
+  // ----- Follow Up (call reschedule) -----
   const openFollowUpModal = (entry) => { setFollowUpEntry(entry); setFollowUpDate(""); };
   const closeFollowUpModal = () => { setFollowUpEntry(null); setFollowUpDate(""); };
 
@@ -524,6 +520,36 @@ export default function DueReminderPopup() {
     }
   };
 
+  // ----- On-site Reschedule -----
+  const openOnsiteModal = (entry) => { setOnsiteEntry(entry); setOnsiteDate(""); };
+  const closeOnsiteModal = () => { setOnsiteEntry(null); setOnsiteDate(""); };
+
+  const handleOnsiteSave = async (e) => {
+    e.preventDefault();
+    if (!onsiteEntry) return;
+    if (!onsiteDate) { showToast("Please select the new due date", "error"); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/due-payments/${onsiteEntry._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOnsiteReschedule: true, dueDate: onsiteDate }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Rescheduled on-site");
+        removeFromList(onsiteEntry._id);
+        closeOnsiteModal();
+      } else {
+        showToast(data.message || "Failed to reschedule", "error");
+      }
+    } catch {
+      showToast("Something went wrong while rescheduling", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading || !visible || entries.length === 0) return <Toast toast={toast} />;
 
   return (
@@ -543,7 +569,6 @@ export default function DueReminderPopup() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {/* ✅ Export PDF Button */}
               {isAdmin && (
                 <button
                   onClick={handleExportPDF}
@@ -581,8 +606,16 @@ export default function DueReminderPopup() {
                     {entry.mobile && (
                       <p className="text-xs text-slate-500">{entry.mobile}</p>
                     )}
+                    {entry.referencedBy && (
+                      <span className="mt-1 inline-block rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+                        {entry.referencedBy}
+                      </span>
+                    )}
+                    {entry.note && (
+                      <p className="mt-1 text-xs italic text-slate-500">{entry.note}</p>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => openEditModal(entry)}
                       className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
@@ -600,6 +633,12 @@ export default function DueReminderPopup() {
                     >
                       Done Calling
                     </button>
+                    <button
+                      onClick={() => openOnsiteModal(entry)}
+                      className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                    >
+                      On-site
+                    </button>
                   </div>
                 </div>
               ))}
@@ -607,7 +646,8 @@ export default function DueReminderPopup() {
           </div>
 
           {/* ── WhatsApp reminder sender ── */}
-          {isAdmin && <WhatsAppReminderSender entries={entries} />}        </div>
+          {isAdmin && <WhatsAppReminderSender entries={entries} />}
+        </div>
       </div>
 
       {/* Edit Modal */}
@@ -651,7 +691,7 @@ export default function DueReminderPopup() {
         </div>
       )}
 
-      {/* Follow Up Modal */}
+      {/* Follow Up Modal (call reschedule) */}
       {followUpEntry && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
@@ -672,6 +712,35 @@ export default function DueReminderPopup() {
                 </button>
                 <button type="submit" disabled={submitting}
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                  {submitting ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* On-site Reschedule Modal */}
+      {onsiteEntry && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="mb-1 text-base font-semibold text-slate-800">On-site Reschedule</h3>
+            <p className="mb-4 text-sm text-slate-600">
+              {onsiteEntry.customerName} &middot; ₹{Number(onsiteEntry.amount).toLocaleString("en-IN")}
+            </p>
+            <form onSubmit={handleOnsiteSave} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">New Due Date</label>
+                <input type="date" value={onsiteDate} onChange={(e) => setOnsiteDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={closeOnsiteModal}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submitting}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60">
                   {submitting ? "Saving..." : "Save"}
                 </button>
               </div>

@@ -157,6 +157,15 @@ export default function DuePaymentManager() {
   const [completingEntry, setCompletingEntry] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  // ── Detail popup state ──
+  // detailEntry = the row that was clicked (used immediately for the header
+  // while the full record is fetched). detailData = full record from
+  // GET /api/due-payments/[id], which has rescheduleHistory, amountGiven, etc.
+  const [detailEntry, setDetailEntry] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
   // Duplicate-mobile confirmation (admin override flow)
   const [duplicateWarning, setDuplicateWarning] = useState(null); // { message, existingEntry, pendingPayload }
 
@@ -364,6 +373,36 @@ export default function DuePaymentManager() {
       setSubmitting(false);
       setDeleteTarget(null);
     }
+  };
+
+  // ---- Detail popup ----
+  // Fetches the full record from the server instead of relying on whatever
+  // fields the list endpoint happened to include, so rescheduleHistory /
+  // amountGiven etc always show up.
+  const openDetail = useCallback(async (entry) => {
+    setDetailEntry(entry);
+    setDetailData(null);
+    setDetailError("");
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`/api/due-payments/${entry._id}`);
+      const data = await res.json();
+      if (data.success) {
+        setDetailData(data.data);
+      } else {
+        setDetailError(data.message || "Failed to load details");
+      }
+    } catch {
+      setDetailError("Something went wrong while loading details");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  const closeDetail = () => {
+    setDetailEntry(null);
+    setDetailData(null);
+    setDetailError("");
   };
 
   return (
@@ -594,7 +633,11 @@ export default function DuePaymentManager() {
                 </tr>
               ) : (
                 filteredEntries.map((entry) => (
-                  <tr key={entry._id} className="hover:bg-slate-50">
+                  <tr
+                    key={entry._id}
+                    onClick={() => openDetail(entry)}
+                    className="cursor-pointer hover:bg-slate-50"
+                  >
                     <td className="px-5 py-3 font-medium text-slate-800">
                       {entry.customerName}
                     </td>
@@ -608,6 +651,7 @@ export default function DuePaymentManager() {
                       <div className="flex flex-col gap-0.5">
                         {entry.mobile ? (
                           <a href={`tel:${entry.mobile}`}
+                            onClick={(e) => e.stopPropagation()}
                             className="text-sky-600 hover:text-sky-800 hover:underline text-sm transition"
                           >
                             +91 {entry.mobile}
@@ -617,6 +661,7 @@ export default function DuePaymentManager() {
                         )}
                         {entry.mobile2 && (
                           <a href={`tel:${entry.mobile2}`}
+                            onClick={(e) => e.stopPropagation()}
                             className="text-xs text-slate-400 hover:text-sky-600 hover:underline transition"
                           >
                             +91 {entry.mobile2}
@@ -627,7 +672,7 @@ export default function DuePaymentManager() {
                     <td className="px-5 py-3">
                       {entry.referencedBy ? (
                         <button
-                          onClick={() => setReferenceFilter(entry.referencedBy)}
+                          onClick={(e) => { e.stopPropagation(); setReferenceFilter(entry.referencedBy); }}
                           className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition"
                           title={`Filter by ${entry.referencedBy}`}
                         >
@@ -645,19 +690,19 @@ export default function DuePaymentManager() {
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => openEditModal(entry)}
+                          onClick={(e) => { e.stopPropagation(); openEditModal(entry); }}
                           className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => setCompletingEntry(entry)}
+                          onClick={(e) => { e.stopPropagation(); setCompletingEntry(entry); }}
                           className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                         >
                           Complete
                         </button>
                         <button
-                          onClick={() => setDeleteTarget(entry)}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(entry); }}
                           className="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                         >
                           Delete
@@ -800,6 +845,74 @@ export default function DuePaymentManager() {
                   {submitting ? "Adding..." : "Add Anyway"}
                 </button>
               </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* ── Entry Detail Modal ── */}
+      {/* Uses detailData (fetched from GET /api/due-payments/[id]) once it
+          arrives, falling back to the row data (detailEntry) for the header
+          so the modal isn't blank while loading. */}
+      {
+        detailEntry && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={closeDetail}>
+            <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              {(() => {
+                const d = detailData || detailEntry;
+                return (
+                  <>
+                    <div className="mb-4 flex items-start justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-800">{d.customerName}</h3>
+                        <p className="text-xs text-slate-400">
+                          {formatDate(d.dueDate)} · ₹{Number(d.amount).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <button onClick={closeDetail} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+                    </div>
+
+                    {detailLoading && <p className="mb-3 text-sm text-slate-400">Loading details…</p>}
+                    {detailError && <p className="mb-3 text-sm text-red-500">{detailError}</p>}
+
+                    {d.referencedBy && (
+                      <span className="mb-2 inline-block rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700">
+                        {d.referencedBy}
+                      </span>
+                    )}
+                    {d.note && <p className="mb-3 text-sm italic text-slate-500">{d.note}</p>}
+
+                    <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+                      <div>
+                        <p className="text-xs text-slate-400">Collected So Far</p>
+                        <p className="font-semibold text-emerald-700">₹{Number(d.amountGiven || 0).toLocaleString("en-IN")}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400">Mobile</p>
+                        <p className="font-semibold text-slate-700">{d.mobile || "—"}</p>
+                      </div>
+                    </div>
+
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Reschedule History</p>
+                    <div className="max-h-48 space-y-2 overflow-y-auto">
+                      {(d.rescheduleHistory || []).length === 0 ? (
+                        <p className="text-sm text-slate-400">No reschedules yet.</p>
+                      ) : (
+                        d.rescheduleHistory.slice().reverse().map((r, i) => (
+                          <div key={i} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${r.type === "call" ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-700"}`}>
+                              {r.type === "call" ? "📞 On Call" : "🏠 On-site"}
+                            </span>
+                            <span className="text-slate-500">
+                              {formatDate(r.previousDueDate)} → {formatDate(r.newDueDate)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )

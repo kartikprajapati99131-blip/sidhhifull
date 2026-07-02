@@ -20,6 +20,18 @@ const DuePaymentSchema = new mongoose.Schema(
     lastFollowUpAt: { type: Date, default: null },
     reminderShown: { type: Boolean, default: false },
 
+    // --- No-Answer tracking (any dueDate change resets this) ---
+    lastDueDateChangeAt: { type: Date, default: null },
+
+    // --- Full reschedule trail (call vs onsite) for the detail popup ---
+    rescheduleHistory: [
+      {
+        type: { type: String, enum: ["call", "onsite"] },
+        previousDueDate: Date,
+        newDueDate: Date,
+        changedAt: { type: Date, default: Date.now },
+      },
+    ],
     referencedBy: {
       type: String,
       default: "",

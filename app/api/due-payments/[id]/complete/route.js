@@ -8,13 +8,14 @@ import mongoose from "mongoose";
 // Body: { paymentMethod: "cash"|"check", amountGiven: number,
 //         accountStatus: "closed"|"continue", remainingAmount: number }
 //
+// If accountStatus === "closed":
+//   - Deletes the entry entirely (no completed record is kept, any
+//     shortfall is written off along with the row itself)
+//
 // If accountStatus === "continue":
 //   - Saves this entry as completed (with amountGiven collected)
 //   - Creates a NEW pending entry with the remaining amount
 //   - The new entry inherits customerName, mobile, note from the original
-//
-// If accountStatus === "closed":
-//   - Simply marks as completed. Any shortfall is written off.
 export async function PUT(request, { params }) {
   try {
     await dbConnect();
@@ -59,24 +60,36 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Save original amount before completing
+    // ── Closed account: purge all data instead of keeping a record ──
+    if (accountStatus === "closed") {
+      await DuePayment.findByIdAndDelete(id);
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Account cleared — all data for this customer has been removed",
+          data: null,
+          newEntry: null,
+        },
+        { status: 200 }
+      );
+    }
+
+    // ── Continue: keep a completed record + spin off a new pending entry ──
     const originalAmount = existingEntry.amount;
 
-    // Mark this entry as completed
     existingEntry.status = "completed";
     existingEntry.completedAt = new Date();
     existingEntry.paymentMethod = paymentMethod;
     existingEntry.amountGiven = Number(amountGiven);
     existingEntry.accountStatus = accountStatus;
-    existingEntry.remainingAmount = accountStatus === "continue" ? Number(remainingAmount) : 0;
+    existingEntry.remainingAmount = Number(remainingAmount);
     existingEntry.originalAmount = originalAmount;
 
     await existingEntry.save();
 
     let newEntry = null;
 
-    // If continuing, create a new pending entry with the remaining balance
-    if (accountStatus === "continue" && remainingAmount > 0) {
+    if (remainingAmount > 0) {
       newEntry = await DuePayment.create({
         customerName: existingEntry.customerName,
         amount: Number(remainingAmount),
@@ -90,10 +103,7 @@ export async function PUT(request, { params }) {
     return NextResponse.json(
       {
         success: true,
-        message:
-          accountStatus === "closed"
-            ? "Payment completed and account closed"
-            : `Partial payment recorded. New entry created for ₹${remainingAmount} remaining.`,
+        message: `Partial payment recorded. New entry created for ₹${remainingAmount} remaining.`,
         data: existingEntry,
         newEntry,
       },
