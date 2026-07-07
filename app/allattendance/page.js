@@ -207,9 +207,17 @@ export default function AdminAttendance() {
           <h1 className="text-xl font-semibold text-gray-900">Attendance Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track and manage employee attendance</p>
         </div>
-        <span className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full">
-          ✓ Live
-        </span>
+       <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push("/salary")}
+            className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-full hover:bg-gray-800"
+          >
+            💰 Salary Details
+          </button>
+          <span className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full">
+            ✓ Live
+          </span>
+        </div>
       </div>
 
       {/* Stats */}

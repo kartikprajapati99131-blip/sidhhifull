@@ -112,11 +112,19 @@ export default function UserAttendancePage() {
             <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
 
                 {/* HEADER */}
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                        Attendance
-                    </h1>
-                    <p className="text-sm text-gray-400 mt-1">Last 2 months</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+                            Attendance
+                        </h1>
+                        <p className="text-sm text-gray-400 mt-1">Last 2 months</p>
+                    </div>
+                    <a
+                        href={`/salary/${id}`}
+                        className="text-xs font-medium bg-gray-900 text-white px-3 py-2 rounded-lg hover:bg-gray-800"
+                    >
+                        💰 Salary
+                    </a>
                 </div>
 
                 {/* CURRENT MONTH HOURS CARD */}
@@ -231,11 +239,10 @@ export default function UserAttendancePage() {
                                                                                 </span>
                                                                             )}
 
-                                                                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                                                                s.totalHours
+                                                                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${s.totalHours
                                                                                     ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
                                                                                     : "text-amber-600 bg-amber-50 border border-amber-100"
-                                                                            }`}>
+                                                                                }`}>
                                                                                 {s.totalHours ? formatHours(s.totalHours) : "In progress"}
                                                                             </span>
                                                                         </div>

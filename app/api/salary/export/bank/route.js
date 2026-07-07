@@ -1,0 +1,76 @@
+import connectDb from "@/db/connectDb";
+import { requireAdmin } from "@/lib/auth";
+import { computeSalarySummary } from "@/lib/salaryCalc";
+import PDFDocument from "pdfkit";
+
+export const runtime = "nodejs";
+
+export async function GET(req) {
+  await connectDb();
+  await requireAdmin();
+
+  const { searchParams } = new URL(req.url);
+  const now = new Date();
+  const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const defaultTo = now.toISOString().split("T")[0];
+  const from = searchParams.get("from") || defaultFrom;
+  const to = searchParams.get("to") || defaultTo;
+
+  const summary = await computeSalarySummary({ from, to });
+
+  const doc = new PDFDocument({ margin: 40, size: "A4" });
+  const chunks = [];
+  doc.on("data", (chunk) => chunks.push(chunk));
+  const done = new Promise((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+
+  doc.fontSize(16).font("Helvetica-Bold").text("Bank Salary Statement", { align: "center" });
+  doc.moveDown(0.3);
+  doc.fontSize(10).font("Helvetica").fillColor("#555").text(`Period: ${from} to ${to}`, { align: "center" });
+  doc.moveDown(1);
+
+  const colX = { name: 40, acc: 200, ifsc: 350, amount: 470 };
+
+  const drawHeader = (y) => {
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#000");
+    doc.text("Employee Name", colX.name, y);
+    doc.text("Account No.", colX.acc, y);
+    doc.text("IFSC Code", colX.ifsc, y);
+    doc.text("Amount (Rs.)", colX.amount, y);
+    doc.moveTo(40, y + 15).lineTo(555, y + 15).strokeColor("#ccc").stroke();
+  };
+
+  let y = doc.y;
+  drawHeader(y);
+  y += 25;
+
+  let grandTotal = 0;
+  doc.font("Helvetica").fontSize(10).fillColor("#222");
+
+  summary.forEach((emp) => {
+    if (y > 750) {
+      doc.addPage();
+      y = 40;
+      drawHeader(y);
+      y += 25;
+    }
+    doc.text(emp.name, colX.name, y, { width: 150 });
+    doc.text(emp.accountNumber || "-", colX.acc, y, { width: 140 });
+    doc.text(emp.ifscCode || "-", colX.ifsc, y, { width: 110 });
+    doc.text(emp.totalIncome.toFixed(2), colX.amount, y, { width: 80 });
+    grandTotal += emp.totalIncome;
+    y += 20;
+  });
+
+  doc.moveTo(40, y + 5).lineTo(555, y + 5).strokeColor("#ccc").stroke();
+  doc.font("Helvetica-Bold").text(`Total: Rs. ${grandTotal.toFixed(2)}`, colX.amount, y + 12);
+
+  doc.end();
+  const pdfBuffer = await done;
+
+  return new Response(pdfBuffer, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="bank-salary-${from}-to-${to}.pdf"`,
+    },
+  });
+}
