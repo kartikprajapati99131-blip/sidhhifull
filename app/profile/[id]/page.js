@@ -114,8 +114,17 @@ export default function ProfilePage() {
 
     const isWorker = ["staff","admin"].includes(user.role);
     const isAdmin = ["admin"].includes(user.role);
-    const totalHours = attendance.reduce((acc, r) => acc + (r.totalHours || 0), 0);
-    const totalDays = new Set(attendance.map((r) => r.date)).size;
+
+    // ✅ current month only
+    const now = new Date();
+    const currentMonthAttendance = attendance.filter((r) => {
+        if (!r.date) return false;
+        const d = new Date(r.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+
+    const totalHours = currentMonthAttendance.reduce((acc, r) => acc + (r.totalHours || 0), 0);
+    const totalDays = new Set(currentMonthAttendance.map((r) => r.date)).size;
     const avgRating = reviews.length
         ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
         : 0;
@@ -173,7 +182,7 @@ export default function ProfilePage() {
                 {/* WORKER STATS */}
                 {isWorker && (
                     <>
-                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">Overview</h2>
+                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">Overview (This Month)</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                             <StatCard label="Total Days" value={totalDays} sub="days present" />
                             <StatCard label="Total Hours" value={`${totalHours.toFixed(1)}h`} sub="worked" />
@@ -240,7 +249,7 @@ export default function ProfilePage() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="font-semibold text-gray-800 text-sm">View Full Attendance</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">{totalDays} days · {totalHours.toFixed(1)} hrs total</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">{totalDays} days · {totalHours.toFixed(1)} hrs this month</p>
                                     </div>
                                     <span className="text-gray-400">→</span>
                                 </div>

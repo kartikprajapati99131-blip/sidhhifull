@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function UserAttendancePage() {
+    const { data: session } = useSession();
+    const canViewSalary = ["admin", "subadmin"].includes(session?.user?.role);
 
     const formatHours = (hours) => {
         if (!hours) return "0 hr";
@@ -119,12 +122,14 @@ export default function UserAttendancePage() {
                         </h1>
                         <p className="text-sm text-gray-400 mt-1">Last 2 months</p>
                     </div>
-                    <a
-                        href={`/salary/${id}`}
-                        className="text-xs font-medium bg-gray-900 text-white px-3 py-2 rounded-lg hover:bg-gray-800"
-                    >
-                        💰 Salary
-                    </a>
+                    {canViewSalary && (
+                        <a
+                            href={`/salary/${id}`}
+                            className="text-xs font-medium bg-gray-900 text-white px-3 py-2 rounded-lg hover:bg-gray-800"
+                        >
+                            💰 Salary
+                        </a>
+                    )}
                 </div>
 
                 {/* CURRENT MONTH HOURS CARD */}
