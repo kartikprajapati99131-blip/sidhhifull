@@ -124,9 +124,10 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
-                        { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/attendance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/followup", label: "Follow-ups", dot: "bg-teal-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
-                        { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
+                        { href: `/reviews/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
                       ))}
@@ -151,6 +152,7 @@ export default function Navbar() {
                     <DropPanel onClose={() => setSubAdminOpen(false)}>
                       {[
                         { href: "/customer", label: "Customer lead", dot: "bg-sky-500" },
+                        { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
                         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
                         { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
@@ -318,6 +320,7 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
+                        { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
                       ))}
