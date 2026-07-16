@@ -125,7 +125,7 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
-                        { href: "/attendance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/followup", label: "Follow-ups", dot: "bg-teal-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                         { href: `/reviews/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
