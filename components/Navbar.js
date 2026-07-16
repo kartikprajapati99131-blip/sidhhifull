@@ -42,6 +42,7 @@ export default function Navbar() {
       items: [
         { href: "/users", label: "All Users", dot: "bg-violet-500" },
         { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
+        { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
         { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
