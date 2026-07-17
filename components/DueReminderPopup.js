@@ -181,13 +181,12 @@ function WhatsAppReminderSender({ entries }) {
                     <button
                       key={i}
                       onClick={() => setStepIdx(i)}
-                      className={`h-2 w-2 rounded-full transition ${
-                        i === stepIdx
+                      className={`h-2 w-2 rounded-full transition ${i === stepIdx
                           ? "w-4 bg-green-500"
                           : sentSet.has(i)
-                          ? "bg-green-300"
-                          : "bg-slate-200"
-                      }`}
+                            ? "bg-green-300"
+                            : "bg-slate-200"
+                        }`}
                     />
                   ))}
                 </div>
@@ -258,11 +257,10 @@ function WhatsAppReminderSender({ entries }) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setSentSet((prev) => new Set([...prev, i]))}
-              className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
-                sentSet.has(i)
+              className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${sentSet.has(i)
                   ? "border-green-300 bg-green-100 text-green-700"
                   : "border-green-200 bg-white text-green-700 hover:bg-green-50"
-              }`}
+                }`}
             >
               {sentSet.has(i) ? "✓ " : ""}
               {e.customerName}
@@ -297,7 +295,8 @@ function EntryCard({ entry, onEdit, onFollowUp, onOnsite }) {
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-800">{entry.customerName}</p>
         <p className="text-sm text-slate-600">
-          ₹{Number(entry.amount).toLocaleString("en-IN")} &middot; Due {formatDate(entry.dueDate)}
+          {(() => { const s = String(Math.trunc(Number(entry.amount))); return s.length <= 1 ? s : s[0] + "." + s.slice(1); })()}
+          &middot; Due {formatDate(entry.dueDate)}
         </p>
         {entry.mobile && (
           <p className="text-xs text-slate-500">{entry.mobile}</p>

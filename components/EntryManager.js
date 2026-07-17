@@ -58,6 +58,216 @@ const ACTION_TITLES = {
   "site-confirm": "Confirm site",
 };
 
+const ACTIVITY_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "added", label: "➕ Added" },
+  { value: "call", label: "📞 Call" },
+  { value: "onsite", label: "🏗️ On-site" },
+  { value: "site-confirm", label: "✅ Confirmed" },
+  { value: "cancel", label: "❌ Cancelled" },
+  { value: "edit", label: "✏️ Edited" },
+];
+
+// "Today's Updates" — every add / call / on-site / confirm / cancel / edit
+// across all entries currently visible to this user, newest first, with
+// Today/Yesterday/N-days-ago labels and an optional date range.
+function ActivityLogView({ entries, onBack, onOpenDetail }) {
+  const [filter, setFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const feed = useMemo(() => buildActivityFeed(entries), [entries]);
+  const hasCustomRange = Boolean(dateFrom || dateTo);
+
+  const filtered = feed.filter((a) => {
+    if (filter !== "all" && a.activity !== filter) return false;
+    if (hasCustomRange) return isWithinRange(a.time, dateFrom, dateTo);
+    return true;
+  });
+
+  const todayCount = feed.filter((a) => isToday(a.time)).length;
+  const clearRange = () => { setDateFrom(""); setDateTo(""); };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <span className="sm:hidden">Back</span>
+          <span className="hidden sm:inline">Back to entries</span>
+        </button>
+        <h2 className="text-base font-semibold text-slate-800">Today&apos;s Updates</h2>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">All Updates</h3>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">Every remark — new entries, calls, on-site visits, confirmations, cancellations, edits</p>
+          </div>
+          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">{todayCount} today</span>
+        </div>
+
+        {/* Mobile: one compact row — activity dropdown + a Date toggle — instead of pills and an open date range */}
+        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 sm:hidden">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          >
+            {ACTIVITY_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`rounded-lg border px-3 py-2 text-xs font-medium ${hasCustomRange ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-300 bg-white text-slate-600"}`}
+          >
+            Date{hasCustomRange ? " •" : ""}
+          </button>
+        </div>
+        {showFilters && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3 sm:hidden">
+            <label className="text-xs text-slate-500">From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+            <label className="text-xs text-slate-500">To</label>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+            {hasCustomRange && (
+              <button onClick={clearRange} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200">
+                Clear ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Desktop: pills + always-visible date range */}
+        <div className="hidden flex-wrap gap-2 border-b border-slate-100 px-5 py-3 sm:flex">
+          {ACTIVITY_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                filter === f.value ? "border-slate-800 bg-slate-800 text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="hidden flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3 sm:flex">
+          <label className="text-xs text-slate-500">From</label>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          />
+          <label className="text-xs text-slate-500">To</label>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          />
+          {hasCustomRange && (
+            <button onClick={clearRange} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200">
+              Clear ✕
+            </button>
+          )}
+        </div>
+
+        {/* Cards — small screens */}
+        <div className="grid grid-cols-1 gap-2 p-4 sm:hidden">
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-500">No activity {hasCustomRange ? "in the selected range" : "yet"}.</p>
+          ) : (
+            filtered.map((a) => {
+              const meta = ACTIVITY_META[a.activity] || ACTIVITY_META.edit;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onOpenDetail(a.entry.id)}
+                  className="rounded-lg border border-slate-100 p-3 text-left hover:bg-slate-50"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-slate-800">{a.entry.name}</span>
+                    <span className={`font-medium text-xs ${isToday(a.time) ? "text-sky-600" : "text-slate-500"}`}>{getDayLabel(a.time)}</span>
+                  </div>
+                  <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.bg} ${meta.text}`}>{meta.label}</span>
+                  {a.text && <p className="mt-1 text-xs text-slate-600">{a.text}</p>}
+                  <p className="mt-1 text-[11px] text-slate-400">{a.by?.name} · {formatTimeOnly(a.time)}</p>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Table — sm and up */}
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3">Name</th>
+                <th className="px-5 py-3">Activity</th>
+                <th className="px-5 py-3">Remark</th>
+                <th className="px-5 py-3">By</th>
+                <th className="px-5 py-3">When</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-500">No activity {hasCustomRange ? "in the selected range" : "yet"}.</td></tr>
+              ) : (
+                filtered.map((a) => {
+                  const meta = ACTIVITY_META[a.activity] || ACTIVITY_META.edit;
+                  return (
+                    <tr key={a.id} onClick={() => onOpenDetail(a.entry.id)} className="cursor-pointer hover:bg-slate-50">
+                      <td className="px-5 py-3 font-medium text-slate-800">
+                        {a.entry.name}
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${a.entry.type === "customer" ? "bg-indigo-50 text-indigo-700" : "bg-orange-50 text-orange-700"}`}>
+                          {a.entry.type === "customer" ? "Customer" : "Mistry"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${meta.bg} ${meta.text}`}>{meta.label}</span>
+                      </td>
+                      <td className="max-w-[260px] px-5 py-3 text-xs text-slate-600">{a.text || <span className="text-slate-400">—</span>}</td>
+                      <td className="px-5 py-3 text-xs text-slate-600">{a.by?.name}</td>
+                      <td className="px-5 py-3 text-xs">
+                        <span className={`font-medium ${isToday(a.time) ? "text-sky-600" : "text-slate-600"}`}>{getDayLabel(a.time)}</span>
+                        <span className="block text-slate-400">{formatTimeOnly(a.time)}</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ACTION_MENU_ITEMS = [
   { action: "site-confirm", label: "Confirm site" },
   { action: "call", label: "Log call" },
@@ -84,7 +294,115 @@ const HISTORY_DOT = {
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const isDueOrOverdue = (e) => e.status === "pending" && e.nextMeetingDate && e.nextMeetingDate <= todayStr();
+
+// How many whole days past the next-meeting date we are (negative = future,
+// 0 = due today). Both sides are plain "YYYY-MM-DD" strings so this is exact.
+function daysOverdue(entry) {
+  if (!entry.nextMeetingDate) return null;
+  const ms = new Date(todayStr()) - new Date(entry.nextMeetingDate);
+  return Math.floor(ms / 86400000);
+}
+
+const NOT_VISITED_AFTER_DAYS = 5;
+
+// Due & overdue page: only entries due today, or overdue by up to 5 days.
+const isDueOrOverdue = (e) => {
+  if (e.status !== "pending" || !e.nextMeetingDate) return false;
+  const d = daysOverdue(e);
+  return d >= 0 && d <= NOT_VISITED_AFTER_DAYS;
+};
+
+// Anything overdue by more than 5 days falls off the due/overdue page and
+// lands here instead — it still needs attention, just not mixed in with
+// fresh follow-ups.
+const isNotVisited = (e) => {
+  if (e.status !== "pending" || !e.nextMeetingDate) return false;
+  const d = daysOverdue(e);
+  return d > NOT_VISITED_AFTER_DAYS;
+};
+
+function isToday(date) {
+  if (!date) return false;
+  const d = new Date(date);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function formatDayOnly(date) {
+  if (!date) return "-";
+  return new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatTimeOnly(date) {
+  if (!date) return "-";
+  return new Date(date).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+// "Today" / "Yesterday" / "N days ago" / plain date once it's far enough back.
+function getDayLabel(date) {
+  if (!date) return "";
+  if (isToday(date)) return "Today";
+  const diffDays = Math.floor((new Date() - new Date(date)) / 86400000);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays > 1 && diffDays <= 6) return `${diffDays} days ago`;
+  return formatDayOnly(date);
+}
+
+// "YYYY-MM-DD" or "" -> is `date` within [from, to] inclusive (either bound optional)
+function isWithinRange(date, from, to) {
+  if (!date) return false;
+  const d = new Date(date);
+  if (from) {
+    const fromD = new Date(from);
+    fromD.setHours(0, 0, 0, 0);
+    if (d < fromD) return false;
+  }
+  if (to) {
+    const toD = new Date(to);
+    toD.setHours(23, 59, 59, 999);
+    if (d > toD) return false;
+  }
+  return true;
+}
+
+const ACTIVITY_META = {
+  added: { label: "➕ New entry added", bg: "bg-blue-50", text: "text-blue-700" },
+  note: { label: "📝 Note added", bg: "bg-slate-50", text: "text-slate-700" },
+  call: { label: "📞 Call logged", bg: "bg-sky-50", text: "text-sky-700" },
+  onsite: { label: "🏗️ On-site visit", bg: "bg-violet-50", text: "text-violet-700" },
+  "site-confirm": { label: "✅ Site confirmed", bg: "bg-emerald-50", text: "text-emerald-700" },
+  cancel: { label: "❌ Cancelled", bg: "bg-rose-50", text: "text-rose-700" },
+  edit: { label: "✏️ Details edited", bg: "bg-amber-50", text: "text-amber-700" },
+};
+
+// Flattens every entry's creation + full history into one timestamp-sorted
+// activity feed — mirrors the "All Updates" view from the payments module.
+function buildActivityFeed(entries) {
+  const list = [];
+  for (const entry of entries) {
+    if (entry.createdAt) {
+      list.push({
+        id: `${entry.id}_added`,
+        entry,
+        activity: "added",
+        time: entry.createdAt,
+        by: entry.createdBy,
+        text: "",
+      });
+    }
+    for (const h of entry.history || []) {
+      list.push({
+        id: `${entry.id}_${h.id}`,
+        entry,
+        activity: h.type,
+        time: h.at,
+        by: h.by,
+        text: h.text,
+      });
+    }
+  }
+  return list.sort((a, b) => new Date(b.time) - new Date(a.time));
+}
 
 function fmtDateTime(iso) {
   if (!iso) return "-";
@@ -457,9 +775,10 @@ export default function EntryManager() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // "due" view completely replaces the normal list — a dedicated screen,
-  // not a panel stacked on top of everything else.
-  const [view, setView] = useState("list"); // "list" | "due"
+  // "due" and "activity" completely replace the normal list — dedicated
+  // screens, not panels stacked on top of everything else.
+  const [view, setView] = useState("list"); // "list" | "due" | "activity"
+  const [showNotVisited, setShowNotVisited] = useState(false);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -488,6 +807,7 @@ export default function EntryManager() {
   }, [fetchEntries]);
 
   const dueEntries = useMemo(() => entries.filter(isDueOrOverdue), [entries]);
+  const notVisitedEntries = useMemo(() => entries.filter(isNotVisited), [entries]);
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
   const filteredEntries = useMemo(() => {
@@ -798,6 +1118,17 @@ export default function EntryManager() {
     </>
   );
 
+  // ── Dedicated "Today's Updates" screen ──────────────────────────────────
+  if (view === "activity") {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <ActivityLogView entries={entries} onBack={() => setView("list")} onOpenDetail={(id) => setDetailEntryId(id)} />
+        {modals}
+      </div>
+    );
+  }
+
   // ── Dedicated "Due & overdue" screen — replaces everything else while open ──
   if (view === "due") {
     return (
@@ -816,6 +1147,7 @@ export default function EntryManager() {
             <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">{dueEntries.length}</span>
           </div>
         </div>
+        <p className="text-xs text-slate-500">Meetings due today or overdue by up to {NOT_VISITED_AFTER_DAYS} days. Anything older moves to Not Visited below.</p>
 
         {dueEntries.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400">
@@ -837,6 +1169,41 @@ export default function EntryManager() {
           </div>
         )}
 
+        {/* Not Visited — overdue by more than 5 days, kept separate so it
+            doesn't clutter the fresh follow-up list above. */}
+        {notVisitedEntries.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <button
+              onClick={() => setShowNotVisited((v) => !v)}
+              className="flex w-full items-center justify-between gap-3"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                Not Visited
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{notVisitedEntries.length}</span>
+              </span>
+              <svg className={`h-4 w-4 text-slate-400 transition-transform ${showNotVisited ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <p className="mt-1 text-xs text-slate-500">Overdue by more than {NOT_VISITED_AFTER_DAYS} days — no longer counted as active follow-ups.</p>
+            {showNotVisited && (
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {notVisitedEntries.map((entry) => (
+                  <EntryCard
+                    key={entry.id}
+                    entry={entry}
+                    canDelete={canSeeAll}
+                    onAction={(e, a) => openActionModal(e, a)}
+                    onEdit={openEditModal}
+                    onDelete={setDeleteTarget}
+                    onOpenDetail={(e) => setDetailEntryId(e.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {modals}
       </div>
     );
@@ -853,6 +1220,12 @@ export default function EntryManager() {
           <span className="capitalize">{currentUser.role}</span> · {canSeeAll ? "viewing all entries" : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setView("activity")}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Today&apos;s Updates
+          </button>
           <button
             onClick={() => setView("due")}
             className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"

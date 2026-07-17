@@ -19,6 +19,13 @@ function formatTime(date) {
   });
 }
 
+// Formats an amount by truncating to an integer and inserting a decimal
+// point after the first digit, e.g. 12345 -> "1.2345"
+function formatAmount(value) {
+  const s = String(Math.trunc(Number(value)));
+  return s.length <= 1 ? s : s[0] + "." + s.slice(1);
+}
+
 // Used when the user picks an explicit From/To range.
 // `from` / `to` are "YYYY-MM-DD" strings from <input type="date">.
 function isWithinRange(date, from, to) {
@@ -100,7 +107,7 @@ const AMOUNT_FIELDS = new Set(["amount"]);
 function formatChangeValue(field, value) {
   if (value === null || value === undefined || value === "") return "—";
   if (DATE_FIELDS.has(field)) return formatDate(value);
-  if (AMOUNT_FIELDS.has(field)) return `₹${Number(value).toLocaleString("en-IN")}`;
+  if (AMOUNT_FIELDS.has(field)) return `₹${formatAmount(value)}`;
   return String(value);
 }
 
@@ -338,16 +345,16 @@ export default function TodayUpdatedEntries() {
                       {a.type === "collected" ? (
                         <span>
                           <span className="font-semibold text-emerald-700">
-                            ₹{Number(a.amountGiven).toLocaleString("en-IN")}
+                            {formatAmount(a.amountGiven)}
                           </span>
                           {a.amount !== a.amountGiven && (
                             <span className="text-slate-400 text-xs ml-1">
-                              / ₹{Number(a.amount).toLocaleString("en-IN")}
+                              / {formatAmount(a.amount)}
                             </span>
                           )}
                         </span>
                       ) : (
-                        <span>₹{Number(a.amount).toLocaleString("en-IN")}</span>
+                        <span>{formatAmount(a.amount)}</span>
                       )}
                     </td>
 
@@ -362,7 +369,7 @@ export default function TodayUpdatedEntries() {
                             <span className="text-emerald-600 font-medium">Account closed</span>
                           ) : (
                             <span className="text-amber-600 font-medium">
-                              ₹{Number(a.remainingAmount).toLocaleString("en-IN")} still pending
+                              {formatAmount(a.remainingAmount)} still pending
                             </span>
                           )}
                         </span>
