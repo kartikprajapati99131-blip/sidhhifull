@@ -68,10 +68,38 @@ const ACTIVITY_FILTERS = [
   { value: "edit", label: "✏️ Edited" },
 ];
 
+// Customer / Mistry toggle — shared across the main list, Today's Updates,
+// and Due & overdue so picking "Customer" hides Mistry entries everywhere
+// and vice versa.
+const TYPE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "customer", label: "Customer" },
+  { value: "mistry", label: "Mistry" },
+];
+
+function TypeFilterToggle({ value, onChange, className = "" }) {
+  return (
+    <div className={`inline-flex rounded-lg border border-slate-300 bg-white p-0.5 ${className}`}>
+      {TYPE_FILTERS.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+            value === o.value ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // "Today's Updates" — every add / call / on-site / confirm / cancel / edit
 // across all entries currently visible to this user, newest first, with
 // Today/Yesterday/N-days-ago labels and an optional date range.
-function ActivityLogView({ entries, onBack, onOpenDetail }) {
+function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOpenDetail }) {
   const [filter, setFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -81,6 +109,7 @@ function ActivityLogView({ entries, onBack, onOpenDetail }) {
   const hasCustomRange = Boolean(dateFrom || dateTo);
 
   const filtered = feed.filter((a) => {
+    if (typeFilter !== "all" && a.entry.type !== typeFilter) return false;
     if (filter !== "all" && a.activity !== filter) return false;
     if (hasCustomRange) return isWithinRange(a.time, dateFrom, dateTo);
     return true;
@@ -91,7 +120,7 @@ function ActivityLogView({ entries, onBack, onOpenDetail }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={onBack}
           className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -101,6 +130,7 @@ function ActivityLogView({ entries, onBack, onOpenDetail }) {
           <span className="hidden sm:inline">Back to entries</span>
         </button>
         <h2 className="text-base font-semibold text-slate-800">Today&apos;s Updates</h2>
+        <TypeFilterToggle value={typeFilter} onChange={onTypeFilterChange} className="ml-auto" />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -772,11 +802,13 @@ export default function EntryManager() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared by list, Today's Updates, Due & overdue
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   // "due" and "activity" completely replace the normal list — dedicated
-  // screens, not panels stacked on top of everything else.
+  // screens, not panels stacked on top of everything else. Both are
+  // admin/subadmin-only (see canSeeStats below).
   const [view, setView] = useState("list"); // "list" | "due" | "activity"
   const [showNotVisited, setShowNotVisited] = useState(false);
 
@@ -806,13 +838,26 @@ export default function EntryManager() {
     fetchEntries();
   }, [fetchEntries]);
 
-  const dueEntries = useMemo(() => entries.filter(isDueOrOverdue), [entries]);
-  const notVisitedEntries = useMemo(() => entries.filter(isNotVisited), [entries]);
+  // If a non-admin/subadmin somehow ends up on a gated view (e.g. role
+  // changes mid-session), bounce back to the normal list.
+  useEffect(() => {
+    if ((view === "due" || view === "activity") && !canSeeStats) {
+      setView("list");
+    }
+  }, [view, canSeeStats]);
+
+  const typeFilteredEntries = useMemo(
+    () => entries.filter((e) => (typeFilter === "all" ? true : e.type === typeFilter)),
+    [entries, typeFilter]
+  );
+
+  const dueEntries = useMemo(() => typeFilteredEntries.filter(isDueOrOverdue), [typeFilteredEntries]);
+  const notVisitedEntries = useMemo(() => typeFilteredEntries.filter(isNotVisited), [typeFilteredEntries]);
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return entries
+    return typeFilteredEntries
       .filter((e) => (statusFilter === "all" ? true : e.status === statusFilter))
       .filter((e) => {
         if (!canSeeStats) return true;
@@ -831,10 +876,10 @@ export default function EntryManager() {
           e.siteAddress?.toLowerCase().includes(q)
         );
       });
-  }, [entries, search, statusFilter, fromDate, toDate, canSeeStats]);
+  }, [typeFilteredEntries, search, statusFilter, fromDate, toDate, canSeeStats]);
 
   const hasDateFilter = canSeeStats && !!(fromDate || toDate);
-  const clearFilters = () => { setSearch(""); setStatusFilter("all"); setFromDate(""); setToDate(""); };
+  const clearFilters = () => { setSearch(""); setStatusFilter("all"); setTypeFilter("all"); setFromDate(""); setToDate(""); };
 
   // ── Add entry ──────────────────────────────────────────────────────────
   function updateField(name, value) {
@@ -1118,24 +1163,31 @@ export default function EntryManager() {
     </>
   );
 
-  // ── Dedicated "Today's Updates" screen ──────────────────────────────────
-  if (view === "activity") {
+  // ── Dedicated "Today's Updates" screen — admin/subadmin only ───────────
+  if (view === "activity" && canSeeStats) {
     return (
       <div className="space-y-4">
         <Toast toast={toast} />
-        <ActivityLogView entries={entries} onBack={() => setView("list")} onOpenDetail={(id) => setDetailEntryId(id)} />
+        <ActivityLogView
+          entries={entries}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onBack={() => setView("list")}
+          onOpenDetail={(id) => setDetailEntryId(id)}
+        />
         {modals}
       </div>
     );
   }
 
-  // ── Dedicated "Due & overdue" screen — replaces everything else while open ──
-  if (view === "due") {
+  // ── Dedicated "Due & overdue" screen — admin/subadmin only, replaces
+  // everything else while open ─────────────────────────────────────────
+  if (view === "due" && canSeeStats) {
     return (
       <div className="space-y-4">
         <Toast toast={toast} />
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setView("list")}
               className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -1146,6 +1198,7 @@ export default function EntryManager() {
             <h2 className="text-base font-semibold text-slate-800">Due &amp; overdue</h2>
             <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">{dueEntries.length}</span>
           </div>
+          <TypeFilterToggle value={typeFilter} onChange={setTypeFilter} />
         </div>
         <p className="text-xs text-slate-500">Meetings due today or overdue by up to {NOT_VISITED_AFTER_DAYS} days. Anything older moves to Not Visited below.</p>
 
@@ -1170,7 +1223,8 @@ export default function EntryManager() {
         )}
 
         {/* Not Visited — overdue by more than 5 days, kept separate so it
-            doesn't clutter the fresh follow-up list above. */}
+            doesn't clutter the fresh follow-up list above. Same admin/subadmin
+            gate + type filter as the rest of this screen. */}
         {notVisitedEntries.length > 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <button
@@ -1220,23 +1274,28 @@ export default function EntryManager() {
           <span className="capitalize">{currentUser.role}</span> · {canSeeAll ? "viewing all entries" : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setView("activity")}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Today&apos;s Updates
-          </button>
-          <button
-            onClick={() => setView("due")}
-            className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Due &amp; overdue
-            {dueEntries.length > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                {dueEntries.length}
-              </span>
-            )}
-          </button>
+          {/* Today's Updates / Due & overdue: admin + subadmin only */}
+          {canSeeStats && (
+            <>
+              <button
+                onClick={() => setView("activity")}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Today&apos;s Updates
+              </button>
+              <button
+                onClick={() => setView("due")}
+                className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Due &amp; overdue
+                {dueEntries.length > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {dueEntries.length}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
@@ -1299,6 +1358,10 @@ export default function EntryManager() {
 
       {/* ── Filters ── */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <label className="text-xs font-medium text-slate-600">Entry type</label>
+          <TypeFilterToggle value={typeFilter} onChange={setTypeFilter} />
+        </div>
         <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
@@ -1353,7 +1416,7 @@ export default function EntryManager() {
             </div>
           )}
         </div>
-        {(search || statusFilter !== "all" || hasDateFilter) && (
+        {(search || statusFilter !== "all" || typeFilter !== "all" || hasDateFilter) && (
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-slate-500">Filtering by next meeting date{hasDateFilter ? "" : " (none set)"}</span>
             <button onClick={clearFilters} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>
@@ -1366,7 +1429,7 @@ export default function EntryManager() {
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-800">Entries</h2>
           <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            {filteredEntries.length} {search || statusFilter !== "all" || hasDateFilter ? "found" : "total"}
+            {filteredEntries.length} {search || statusFilter !== "all" || typeFilter !== "all" || hasDateFilter ? "found" : "total"}
           </span>
         </div>
 
