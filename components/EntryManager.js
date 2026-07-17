@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 
 const CAN_SEE_ALL_ROLES = ["admin", "sales"];
+
+// Date-range filter: admin + subadmin.
+const STATS_ROLES = ["admin", "subadmin"];
+
+// Customer success-ratio panel (reveals per-staff conversion rates) — admin only.
+const SUCCESS_RATIO_ROLES = ["admin"];
 
 const EMPTY_FORM = {
   mobile1: "",
@@ -52,6 +58,31 @@ const ACTION_TITLES = {
   "site-confirm": "Confirm site",
 };
 
+const ACTION_MENU_ITEMS = [
+  { action: "site-confirm", label: "Confirm site" },
+  { action: "call", label: "Log call" },
+  { action: "onsite", label: "Log on-site" },
+  { action: "cancel", label: "Cancel", danger: true },
+];
+
+const HISTORY_LABEL = {
+  note: "Note",
+  call: "Called",
+  onsite: "On-site Visit",
+  cancel: "Cancelled",
+  "site-confirm": "Site Confirmed",
+  edit: "Edited",
+};
+
+const HISTORY_DOT = {
+  note: "bg-slate-400",
+  call: "bg-sky-500",
+  onsite: "bg-violet-500",
+  cancel: "bg-rose-500",
+  "site-confirm": "bg-emerald-500",
+  edit: "bg-amber-500",
+};
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const isDueOrOverdue = (e) => e.status === "pending" && e.nextMeetingDate && e.nextMeetingDate <= todayStr();
 
@@ -65,7 +96,7 @@ function Toast({ toast }) {
   const isError = toast.type === "error";
   return (
     <div
-      className={`fixed bottom-5 right-5 z-[100] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg transition-all ${isError ? "bg-red-600" : "bg-emerald-600"}`}
+      className={`fixed bottom-5 right-5 left-5 z-[100] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg transition-all sm:left-auto ${isError ? "bg-red-600" : "bg-emerald-600"}`}
       role="status"
     >
       {toast.message}
@@ -104,6 +135,291 @@ function Field({ field, value, onChange }) {
   );
 }
 
+// One dropdown holding every status action (Confirm / Call / On-site / Cancel)
+// plus Edit and (if allowed) Delete — replaces the old row of separate buttons.
+function ActionMenu({ entry, canDelete, onAction, onEdit, onDelete, align = "right" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const disabled = entry.status === "cancelled";
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative inline-block text-left" ref={ref} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+      >
+        Actions
+        <svg className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className={`absolute z-20 mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg ${align === "right" ? "right-0" : "left-0"}`}>
+          {ACTION_MENU_ITEMS.map((item) => (
+            <button
+              key={item.action}
+              type="button"
+              disabled={disabled}
+              onClick={() => { setOpen(false); onAction(entry, item.action); }}
+              className={`block w-full px-3 py-1.5 text-left text-xs font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${item.danger ? "text-rose-600" : "text-slate-700"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+          <div className="my-1 border-t border-slate-100" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onEdit(entry); }}
+            className="block w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Edit
+          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onDelete(entry); }}
+              className="block w-full px-3 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-slate-50"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
+      <dd className="text-sm text-slate-800">{value}</dd>
+    </div>
+  );
+}
+
+// Full-detail popup opened by clicking any entry — every field, plus the
+// complete history timeline, laid out clearly instead of squeezed into a row.
+function DetailModal({ entry, onClose }) {
+  if (!entry) return null;
+  const isCustomer = entry.type === "customer";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isCustomer ? "bg-indigo-50 text-indigo-700" : "bg-orange-50 text-orange-700"}`}>
+                {isCustomer ? "Customer" : "Mistry"}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[entry.status]}`}>{entry.status}</span>
+              {isDueOrOverdue(entry) && (
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
+                  {entry.nextMeetingDate === todayStr() ? "Due today" : "Overdue"}
+                </span>
+              )}
+            </div>
+            <h3 className="mt-1.5 text-lg font-semibold text-slate-900">{entry.name || "—"}</h3>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+          <DetailRow label="Mobile No 1" value={entry.mobile1 && <CallLink number={entry.mobile1} />} />
+          <DetailRow label="Mobile No 2" value={entry.mobile2 && <CallLink number={entry.mobile2} />} />
+          <DetailRow label="Next meeting date" value={entry.nextMeetingDate} />
+
+          {isCustomer && (
+            <>
+              <DetailRow label="Profession" value={entry.profession} />
+              <div className="sm:col-span-2"><DetailRow label="Site Address" value={entry.siteAddress} /></div>
+              <div className="sm:col-span-2"><DetailRow label="Permanent Address" value={entry.permanentAddress} /></div>
+              <DetailRow label="Mistry Name" value={entry.mistryName} />
+              <DetailRow label="Mistry Number" value={entry.mistryNumber && <CallLink number={entry.mistryNumber} />} />
+              <DetailRow label="Architect Name" value={entry.architectName} />
+              <DetailRow label="Architect Number" value={entry.architectNumber && <CallLink number={entry.architectNumber} />} />
+            </>
+          )}
+
+          <DetailRow label="Added by" value={`${entry.createdBy?.name} (${entry.createdBy?.role})`} />
+          <DetailRow label="Created" value={fmtDateTime(entry.createdAt)} />
+        </dl>
+
+        <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          History ({entry.history?.length || 0})
+        </p>
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {(!entry.history || entry.history.length === 0) ? (
+            <p className="text-sm text-slate-400">No activity yet.</p>
+          ) : (
+            entry.history.slice().reverse().map((h) => (
+              <div key={h.id} className="flex items-start gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                <span className={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${HISTORY_DOT[h.type]}`} />
+                <div>
+                  <span className="font-medium text-slate-700">{HISTORY_LABEL[h.type]}</span>
+                  <span className="text-slate-400"> · {h.by?.name} ({h.by?.role}) · {fmtDateTime(h.at)}</span>
+                  {h.text && <p className="mt-0.5 text-slate-600">{h.text}</p>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A single entry rendered as a card — used on small screens instead of a
+// horizontally-scrolling table row.
+function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  return (
+    <div
+      onClick={() => onOpenDetail(entry)}
+      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${entry.type === "customer" ? "bg-indigo-50 text-indigo-700" : "bg-orange-50 text-orange-700"}`}>
+              {entry.type === "customer" ? "Customer" : "Mistry"}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[entry.status]}`}>{entry.status}</span>
+          </div>
+          <h3 className="mt-1.5 text-sm font-semibold text-slate-900">{entry.name || "—"}</h3>
+        </div>
+        <ActionMenu entry={entry} canDelete={canDelete} onAction={onAction} onEdit={onEdit} onDelete={onDelete} />
+      </div>
+
+      <dl className="mt-2 space-y-1 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-1">
+          <dt className="font-medium text-slate-500">Mobile:</dt>
+          <dd><CallLink number={entry.mobile1} /></dd>
+          {entry.mobile2 && <><span>/</span><dd><CallLink number={entry.mobile2} /></dd></>}
+        </div>
+        {entry.nextMeetingDate && (
+          <div className="flex items-center gap-1.5">
+            <dt className="font-medium text-slate-500">Next meeting:</dt>
+            <dd>{entry.nextMeetingDate}</dd>
+            {isDueOrOverdue(entry) && (
+              <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                {entry.nextMeetingDate === todayStr() ? "Due today" : "Overdue"}
+              </span>
+            )}
+          </div>
+        )}
+        <div><dt className="inline font-medium text-slate-500">Added by: </dt><dd className="inline">{entry.createdBy?.name} ({entry.createdBy?.role})</dd></div>
+      </dl>
+
+      {entry.history?.length > 0 && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); setHistoryOpen((v) => !v); }}
+            className="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            {historyOpen ? "Hide" : "Show"} history ({entry.history.length})
+          </button>
+          {historyOpen && (
+            <ul className="mt-2 space-y-1.5 border-t border-slate-100 pt-2 text-xs text-slate-500" onClick={(e) => e.stopPropagation()}>
+              {entry.history.slice().reverse().map((h) => (
+                <li key={h.id}>
+                  <span className="font-medium capitalize text-slate-700">{h.type.replace("-", " ")}</span> · {h.by?.name} · {fmtDateTime(h.at)}
+                  {h.text && <div className="text-slate-500">{h.text}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Success ratio for customer entries: site-confirmed vs total, plus a
+// per-staff breakdown. Only rendered for admin / subadmin.
+function StatsPanel({ entries }) {
+  const customerEntries = entries.filter((e) => e.type === "customer");
+  const total = customerEntries.length;
+  const confirmed = customerEntries.filter((e) => e.status === "site-confirmed").length;
+  const cancelled = customerEntries.filter((e) => e.status === "cancelled").length;
+  const pending = total - confirmed - cancelled;
+  const rate = total ? Math.round((confirmed / total) * 100) : 0;
+
+  const byStaff = useMemo(() => {
+    const map = new Map();
+    for (const e of customerEntries) {
+      const key = e.createdBy?.name || "Unknown";
+      if (!map.has(key)) map.set(key, { name: key, total: 0, confirmed: 0 });
+      const row = map.get(key);
+      row.total += 1;
+      if (e.status === "site-confirmed") row.confirmed += 1;
+    }
+    return Array.from(map.values())
+      .map((r) => ({ ...r, rate: r.total ? Math.round((r.confirmed / r.total) * 100) : 0 }))
+      .sort((a, b) => b.rate - a.rate);
+  }, [customerEntries]);
+
+  if (total === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-slate-800">Customer success ratio</h2>
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{rate}% site-confirmed</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Total customers</p>
+          <p className="text-lg font-semibold text-slate-800">{total}</p>
+        </div>
+        <div className="rounded-lg bg-emerald-50 p-3">
+          <p className="text-xs text-emerald-700">Site-confirmed</p>
+          <p className="text-lg font-semibold text-emerald-700">{confirmed}</p>
+        </div>
+        <div className="rounded-lg bg-amber-50 p-3">
+          <p className="text-xs text-amber-700">Pending</p>
+          <p className="text-lg font-semibold text-amber-700">{pending}</p>
+        </div>
+        <div className="rounded-lg bg-rose-50 p-3">
+          <p className="text-xs text-rose-700">Cancelled</p>
+          <p className="text-lg font-semibold text-rose-700">{cancelled}</p>
+        </div>
+      </div>
+
+      {byStaff.length > 1 && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">By staff</p>
+          <ul className="space-y-2">
+            {byStaff.map((r) => (
+              <li key={r.name} className="flex items-center gap-2 text-xs">
+                <span className="w-24 flex-shrink-0 truncate text-slate-700">{r.name}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${r.rate}%` }} />
+                </div>
+                <span className="w-16 flex-shrink-0 text-right font-medium text-slate-600">{r.rate}% ({r.confirmed}/{r.total})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EntryManager() {
   const { data: session } = useSession();
   const currentUser = {
@@ -112,7 +428,8 @@ export default function EntryManager() {
     role: session?.user?.role || "staff",
   };
   const canSeeAll = CAN_SEE_ALL_ROLES.includes(currentUser.role);
-  const isAdmin = currentUser.role === "admin";
+  const canSeeStats = STATS_ROLES.includes(currentUser.role);
+  const canSeeSuccessRatio = SUCCESS_RATIO_ROLES.includes(currentUser.role);
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -132,11 +449,17 @@ export default function EntryManager() {
   const [actionNextDate, setActionNextDate] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [duplicateWarning, setDuplicateWarning] = useState(null); // { message, existingEntry, pendingPayload }
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const [detailEntryId, setDetailEntryId] = useState(null);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  // "due" view completely replaces the normal list — a dedicated screen,
+  // not a panel stacked on top of everything else.
+  const [view, setView] = useState("list"); // "list" | "due"
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -165,11 +488,20 @@ export default function EntryManager() {
   }, [fetchEntries]);
 
   const dueEntries = useMemo(() => entries.filter(isDueOrOverdue), [entries]);
+  const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
     return entries
       .filter((e) => (statusFilter === "all" ? true : e.status === statusFilter))
+      .filter((e) => {
+        if (!canSeeStats) return true;
+        if (!fromDate && !toDate) return true;
+        if (!e.nextMeetingDate) return false;
+        if (fromDate && e.nextMeetingDate < fromDate) return false;
+        if (toDate && e.nextMeetingDate > toDate) return false;
+        return true;
+      })
       .filter((e) => {
         if (!q) return true;
         return (
@@ -179,7 +511,10 @@ export default function EntryManager() {
           e.siteAddress?.toLowerCase().includes(q)
         );
       });
-  }, [entries, search, statusFilter]);
+  }, [entries, search, statusFilter, fromDate, toDate, canSeeStats]);
+
+  const hasDateFilter = canSeeStats && !!(fromDate || toDate);
+  const clearFilters = () => { setSearch(""); setStatusFilter("all"); setFromDate(""); setToDate(""); };
 
   // ── Add entry ──────────────────────────────────────────────────────────
   function updateField(name, value) {
@@ -346,7 +681,6 @@ export default function EntryManager() {
       if (data.success) {
         showToast("Entry updated successfully");
         setActionModal(null);
-        setNotifOpen(false);
         fetchEntries();
       } else {
         showToast(data.message || "Failed to update entry", "error");
@@ -361,19 +695,166 @@ export default function EntryManager() {
   const fields = entryType === "customer" ? CUSTOMER_FIELDS : MISTRY_FIELDS;
   const editFields = editEntryType === "customer" ? CUSTOMER_FIELDS : MISTRY_FIELDS;
 
+  // ── Shared modals (used by both the list view and the due view) ────────
+  const modals = (
+    <>
+      <DetailModal entry={detailEntry} onClose={() => setDetailEntryId(null)} />
+      {editingEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={closeEditModal}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-base font-semibold text-slate-800">Edit {editEntryType === "customer" ? "Customer" : "Mistry"}</h3>
+            <form onSubmit={handleEditSave} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {editFields.map((f) => (
+                <Field key={f.name} field={f} value={editForm[f.name]} onChange={(name, value) => setEditForm((p) => ({ ...p, [name]: value }))} />
+              ))}
+              <div className="sm:col-span-1">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
+                <input
+                  type="date"
+                  value={editForm.nextMeetingDate}
+                  onChange={(e) => setEditForm((p) => ({ ...p, nextMeetingDate: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="flex flex-col-reverse justify-end gap-2 pt-2 sm:col-span-2 sm:flex-row">
+                <button type="button" onClick={closeEditModal} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+                <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                  {submitting ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {actionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setActionModal(null)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-800">{ACTION_TITLES[actionModal.action]}</h3>
+            <textarea
+              autoFocus
+              rows={3}
+              value={actionText}
+              onChange={(e) => setActionText(e.target.value)}
+              placeholder={actionModal.action === "cancel" ? "Reason for cancelling…" : "Optional remark…"}
+              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+            {(actionModal.action === "call" || actionModal.action === "onsite") && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
+                <input
+                  type="date"
+                  value={actionNextDate}
+                  onChange={(e) => setActionNextDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            )}
+            <div className="mt-4 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <button onClick={() => setActionModal(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Close</button>
+              <button
+                disabled={submitting || (actionModal.action === "cancel" && !actionText.trim())}
+                onClick={submitAction}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
+              >
+                {submitting ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="mb-2 text-base font-semibold text-slate-800">Delete entry</h3>
+            <p className="mb-5 text-sm text-slate-600">
+              Are you sure you want to delete the entry for &quot;{deleteTarget.name}&quot;? This cannot be undone.
+            </p>
+            <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <button onClick={() => setDeleteTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+              <button onClick={handleDelete} disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
+                {submitting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="mb-2 text-base font-semibold text-amber-700">⚠ Number already exists</h3>
+            <p className="mb-5 text-sm text-slate-600">{duplicateWarning.message}</p>
+            <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <button onClick={() => setDuplicateWarning(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+              <button onClick={handleForceAdd} disabled={submitting} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60">
+                {submitting ? "Saving…" : "Save anyway"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // ── Dedicated "Due & overdue" screen — replaces everything else while open ──
+  if (view === "due") {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView("list")}
+              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Back to entries
+            </button>
+            <h2 className="text-base font-semibold text-slate-800">Due &amp; overdue</h2>
+            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">{dueEntries.length}</span>
+          </div>
+        </div>
+
+        {dueEntries.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400">
+            Nothing due or overdue right now 🎉
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {dueEntries.map((entry) => (
+              <EntryCard
+                key={entry.id}
+                entry={entry}
+                canDelete={canSeeAll}
+                onAction={(e, a) => openActionModal(e, a)}
+                onEdit={openEditModal}
+                onDelete={setDeleteTarget}
+                onOpenDetail={(e) => setDetailEntryId(e.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Normal entries view ─────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <Toast toast={toast} />
 
-      {/* ── Header row: visibility note + notifications + add button ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-slate-500">
           Signed in as <span className="font-medium text-slate-700">{currentUser.name}</span> ·{" "}
           <span className="capitalize">{currentUser.role}</span> · {canSeeAll ? "viewing all entries" : "viewing your entries only"}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setNotifOpen((v) => !v)}
+            onClick={() => setView("due")}
             className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             Due &amp; overdue
@@ -392,48 +873,19 @@ export default function EntryManager() {
         </div>
       </div>
 
-      {notifOpen && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h4 className="mb-2 text-sm font-semibold text-slate-800">Today &amp; overdue meetings</h4>
-          {dueEntries.length === 0 ? (
-            <p className="py-3 text-center text-xs text-slate-400">Nothing due right now.</p>
-          ) : (
-            <ul className="space-y-2">
-              {dueEntries.map((entry) => (
-                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 p-2.5">
-                  <div>
-                    <span className="text-sm font-medium text-slate-800">{entry.name}</span>
-                    <span className="ml-2 text-xs text-red-600">{entry.nextMeetingDate}</span>
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      {entry.type === "customer" ? "Customer" : "Mistry"} · <CallLink number={entry.mobile1} />
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => openActionModal(entry, "call")} className="rounded-md bg-sky-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-sky-700">Call</button>
-                    <button onClick={() => openActionModal(entry, "onsite")} className="rounded-md bg-violet-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-violet-700">On-site</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
       {/* ── Add Entry form ── */}
       {showForm && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-end justify-between">
-            <div className="max-w-xs">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Entry type</label>
-              <select
-                value={entryType}
-                onChange={(e) => { setEntryType(e.target.value); setForm(EMPTY_FORM); }}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="customer">Customer</option>
-                <option value="mistry">Mistry</option>
-              </select>
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 max-w-xs">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Entry type</label>
+            <select
+              value={entryType}
+              onChange={(e) => { setEntryType(e.target.value); setForm(EMPTY_FORM); }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="customer">Customer</option>
+              <option value="mistry">Mistry</option>
+            </select>
           </div>
 
           <form onSubmit={handleAddEntry} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -459,7 +911,7 @@ export default function EntryManager() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
-            <div className="flex justify-end gap-2 sm:col-span-2">
+            <div className="flex flex-col-reverse justify-end gap-2 sm:col-span-2 sm:flex-row">
               <button type="button" onClick={resetForm} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
               <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
                 {submitting ? "Saving…" : `Save ${entryType}`}
@@ -469,32 +921,20 @@ export default function EntryManager() {
         </div>
       )}
 
-      {/* ── Entries table ── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold text-slate-800">Entries</h2>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-              {filteredEntries.length} {search || statusFilter !== "all" ? "found" : "total"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="site-confirmed">Site Confirmed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-            <div className="relative w-full sm:w-56">
+      {/* ── Success ratio (admin only) ── */}
+      {canSeeSuccessRatio && <StatsPanel entries={entries} />}
+
+      {/* ── Filters ── */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+          <div className="lg:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
+            <div className="relative">
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, mobile, address…"
+                placeholder="Name, mobile, address…"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-8 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               {search && (
@@ -502,33 +942,93 @@ export default function EntryManager() {
               )}
             </div>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="site-confirmed">Site Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          {canSeeStats && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">From date</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">To date</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        {(search || statusFilter !== "all" || hasDateFilter) && (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-slate-500">Filtering by next meeting date{hasDateFilter ? "" : " (none set)"}</span>
+            <button onClick={clearFilters} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Entries: table on larger screens, cards on small screens ── */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="text-base font-semibold text-slate-800">Entries</h2>
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+            {filteredEntries.length} {search || statusFilter !== "all" || hasDateFilter ? "found" : "total"}
+          </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-3">Name</th>
-                <th className="px-5 py-3">Type</th>
-                <th className="px-5 py-3">Mobile</th>
-                <th className="px-5 py-3">Next meeting</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Added by</th>
-                <th className="px-5 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">Loading entries…</td></tr>
-              ) : entries.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">No entries yet. Tap "+ Add entry" to create one.</td></tr>
-              ) : filteredEntries.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">No results match the current filters.</td></tr>
-              ) : (
-                filteredEntries.map((entry) => {
-                  const disabled = entry.status === "cancelled";
-                  return (
-                    <tr key={entry.id} className="align-top hover:bg-slate-50">
+        {loading ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading entries…</p>
+        ) : entries.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">No entries yet. Tap "+ Add entry" to create one.</p>
+        ) : filteredEntries.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">No results match the current filters.</p>
+        ) : (
+          <>
+            {/* Cards — small screens */}
+            <div className="grid grid-cols-1 gap-3 p-4 sm:hidden">
+              {filteredEntries.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} canDelete={canSeeAll} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} onOpenDetail={(e) => setDetailEntryId(e.id)} />
+              ))}
+            </div>
+
+            {/* Table — sm and up */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="px-5 py-3">Name</th>
+                    <th className="px-5 py-3">Type</th>
+                    <th className="px-5 py-3">Mobile</th>
+                    <th className="px-5 py-3">Next meeting</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="hidden px-5 py-3 lg:table-cell">Added by</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredEntries.map((entry) => (
+                    <tr key={entry.id} onClick={() => setDetailEntryId(entry.id)} className="cursor-pointer align-top hover:bg-slate-50">
                       <td className="px-5 py-3 font-medium text-slate-800">{entry.name || "—"}</td>
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${entry.type === "customer" ? "bg-indigo-50 text-indigo-700" : "bg-orange-50 text-orange-700"}`}>
@@ -552,142 +1052,20 @@ export default function EntryManager() {
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[entry.status]}`}>{entry.status}</span>
                       </td>
-                      <td className="px-5 py-3 text-slate-600">{entry.createdBy?.name} <span className="text-slate-400">({entry.createdBy?.role})</span></td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap justify-end gap-1.5">
-                          <button disabled={disabled} onClick={() => openActionModal(entry, "site-confirm")} className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Confirm</button>
-                          <button disabled={disabled} onClick={() => openActionModal(entry, "call")} className="rounded-md bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-40">Call</button>
-                          <button disabled={disabled} onClick={() => openActionModal(entry, "onsite")} className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-40">On-site</button>
-                          <button disabled={disabled} onClick={() => openActionModal(entry, "cancel")} className="rounded-md bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-40">Cancel</button>
-                          <button onClick={() => openEditModal(entry)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">Edit</button>
-                          {canSeeAll && (
-                            <button onClick={() => setDeleteTarget(entry)} className="rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100">Delete</button>
-                          )}
-                        </div>
-                        {entry.history?.length > 0 && (
-                          <details className="mt-2 text-xs text-slate-500">
-                            <summary className="cursor-pointer text-indigo-600 hover:text-indigo-800">History ({entry.history.length})</summary>
-                            <ul className="mt-1.5 space-y-1 text-left">
-                              {entry.history.slice().reverse().map((h) => (
-                                <li key={h.id}>
-                                  <span className="font-medium text-slate-700 capitalize">{h.type.replace("-", " ")}</span>
-                                  {" · "}{h.by?.name} · {fmtDateTime(h.at)}
-                                  {h.text && <div className="text-slate-500">{h.text}</div>}
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
+                      <td className="hidden px-5 py-3 text-slate-600 lg:table-cell">{entry.createdBy?.name} <span className="text-slate-400">({entry.createdBy?.role})</span></td>
+                      <td className="px-5 py-3 text-right">
+                        <ActionMenu entry={entry} canDelete={canSeeAll} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} />
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── Edit Modal ── */}
-      {editingEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={closeEditModal}>
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-base font-semibold text-slate-800">Edit {editEntryType === "customer" ? "Customer" : "Mistry"}</h3>
-            <form onSubmit={handleEditSave} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {editFields.map((f) => (
-                <Field key={f.name} field={f} value={editForm[f.name]} onChange={(name, value) => setEditForm((p) => ({ ...p, [name]: value }))} />
-              ))}
-              <div className="sm:col-span-1">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
-                <input
-                  type="date"
-                  value={editForm.nextMeetingDate}
-                  onChange={(e) => setEditForm((p) => ({ ...p, nextMeetingDate: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
-                <button type="button" onClick={closeEditModal} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
-                <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
-                  {submitting ? "Saving…" : "Save changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Action Modal (call / on-site / cancel / site-confirm) ── */}
-      {actionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setActionModal(null)}>
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-slate-800">{ACTION_TITLES[actionModal.action]}</h3>
-            <textarea
-              autoFocus
-              rows={3}
-              value={actionText}
-              onChange={(e) => setActionText(e.target.value)}
-              placeholder={actionModal.action === "cancel" ? "Reason for cancelling…" : "Optional remark…"}
-              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            />
-            {(actionModal.action === "call" || actionModal.action === "onsite") && (
-              <div className="mt-3">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
-                <input
-                  type="date"
-                  value={actionNextDate}
-                  onChange={(e) => setActionNextDate(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setActionModal(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Close</button>
-              <button
-                disabled={submitting || (actionModal.action === "cancel" && !actionText.trim())}
-                onClick={submitAction}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
-              >
-                {submitting ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete Confirm Modal ── */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-2 text-base font-semibold text-slate-800">Delete entry</h3>
-            <p className="mb-5 text-sm text-slate-600">
-              Are you sure you want to delete the entry for &quot;{deleteTarget.name}&quot;? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
-              <button onClick={handleDelete} disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
-                {submitting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Duplicate Mobile Warning ── */}
-      {duplicateWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-2 text-base font-semibold text-amber-700">⚠ Number already exists</h3>
-            <p className="mb-5 text-sm text-slate-600">{duplicateWarning.message}</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDuplicateWarning(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
-              <button onClick={handleForceAdd} disabled={submitting} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60">
-                {submitting ? "Saving…" : "Save anyway"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modals}
     </div>
   );
 }

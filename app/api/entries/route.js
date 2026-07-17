@@ -11,7 +11,7 @@ import { serializeEntry } from "@/lib/serializeEntry";
 
 // Roles allowed to see every entry, not just their own — keep this in sync
 // with app/entries/followup/page.js and the [id] routes below.
-export const CAN_SEE_ALL_ROLES = ["admin", "sales"];
+export const CAN_SEE_ALL_ROLES = ["admin", "sales","subadmin"];
 
 // GET /api/entries
 // admin & sales -> every entry. Everyone else -> only entries they created.
