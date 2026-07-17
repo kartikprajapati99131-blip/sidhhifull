@@ -13,7 +13,7 @@ const ActorSchema = new mongoose.Schema(
 const HistorySchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["note", "call", "onsite", "cancel", "site-confirm"],
+    enum: ["note", "call", "onsite", "cancel", "site-confirm", "edit"],
     required: true,
   },
   text: { type: String, default: "" },
@@ -27,11 +27,11 @@ const EntrySchema = new mongoose.Schema(
 
     // Shared fields
     mobile1: { type: String, required: true, trim: true },
-    mobile2: { type: String, trim: true },
+    mobile2: { type: String, trim: true, default: "" },
     name: { type: String, required: true, trim: true },
     nextMeetingDate: { type: String, default: "" }, // stored as "YYYY-MM-DD"
 
-    // Customer-only fields (simply left blank for mistry entries)
+    // Customer-only fields (left blank for mistry entries)
     siteAddress: { type: String, default: "" },
     permanentAddress: { type: String, default: "" },
     profession: { type: String, default: "" },
@@ -55,5 +55,6 @@ const EntrySchema = new mongoose.Schema(
 // Fast lookups for "my entries" and for the due-today/overdue notification query
 EntrySchema.index({ "createdBy.id": 1 });
 EntrySchema.index({ status: 1, nextMeetingDate: 1 });
+EntrySchema.index({ mobile1: 1 });
 
 export default mongoose.models.Entry || mongoose.model("Entry", EntrySchema);
