@@ -3,10 +3,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 
-const CAN_SEE_ALL_ROLES = ["admin", "sales"];
+// Roles that can see EVERY entry (not just their own).
+const CAN_SEE_ALL_ROLES = ["admin", "subadmin", "sales"];
 
-// Date-range filter: admin + subadmin.
-const STATS_ROLES = ["admin", "subadmin"];
+// Roles that can delete an entry. Sales can view/add/edit but NOT delete.
+const CAN_DELETE_ROLES = ["admin", "subadmin"];
+
+// Roles that can open the "Due & overdue" screen — but that screen only
+// ever shows entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
+// days. Sales IS included here.
+const DUE_VIEW_ROLES = ["admin", "subadmin", "sales"];
+
+// Roles that can see "Not Visited" (overdue by MORE than
+// NOT_VISITED_AFTER_DAYS days), "Today's Updates" (activity log), and use
+// the date-range filter. Sales is intentionally NOT in this list.
+const ADMIN_SUBADMIN_ROLES = ["admin", "subadmin"];
 
 // Customer success-ratio panel (reveals per-staff conversion rates) — admin only.
 const SUCCESS_RATIO_ROLES = ["admin"];
@@ -776,7 +787,17 @@ export default function EntryManager() {
     role: session?.user?.role || "staff",
   };
   const canSeeAll = CAN_SEE_ALL_ROLES.includes(currentUser.role);
-  const canSeeStats = STATS_ROLES.includes(currentUser.role);
+  // canDelete is separate from canSeeAll: sales can view all entries but
+  // must NOT be able to delete them — only admin and subadmin can.
+  const canDelete = CAN_DELETE_ROLES.includes(currentUser.role);
+  // canSeeDue = allowed to open "Due & overdue" (today + up to
+  // NOT_VISITED_AFTER_DAYS days overdue). Sales IS included.
+  const canSeeDue = DUE_VIEW_ROLES.includes(currentUser.role);
+  // canSeeStats = allowed to see "Not Visited", "Today's Updates", and the
+  // date-range filter. Sales is deliberately excluded here even though
+  // sales can see all entries (canSeeAll) and can open Due & overdue
+  // (canSeeDue) above.
+  const canSeeStats = ADMIN_SUBADMIN_ROLES.includes(currentUser.role);
   const canSeeSuccessRatio = SUCCESS_RATIO_ROLES.includes(currentUser.role);
 
   const [entries, setEntries] = useState([]);
@@ -808,7 +829,8 @@ export default function EntryManager() {
 
   // "due" and "activity" completely replace the normal list — dedicated
   // screens, not panels stacked on top of everything else. Both are
-  // admin/subadmin-only (see canSeeStats below).
+  // admin/subadmin-only (see canSeeStats below). Sales can never reach
+  // either screen, no matter how `view` gets set.
   const [view, setView] = useState("list"); // "list" | "due" | "activity"
   const [showNotVisited, setShowNotVisited] = useState(false);
 
@@ -838,13 +860,18 @@ export default function EntryManager() {
     fetchEntries();
   }, [fetchEntries]);
 
-  // If a non-admin/subadmin somehow ends up on a gated view (e.g. role
-  // changes mid-session), bounce back to the normal list.
+  // If a role ends up on a gated view it isn't allowed to see — e.g. role
+  // changes mid-session, stale state, or a manually crafted state update —
+  // bounce straight back to the normal list. "due" is allowed for sales;
+  // "activity" (Today's Updates) is admin/subadmin only.
   useEffect(() => {
-    if ((view === "due" || view === "activity") && !canSeeStats) {
+    if (view === "due" && !canSeeDue) {
       setView("list");
     }
-  }, [view, canSeeStats]);
+    if (view === "activity" && !canSeeStats) {
+      setView("list");
+    }
+  }, [view, canSeeDue, canSeeStats]);
 
   const typeFilteredEntries = useMemo(
     () => entries.filter((e) => (typeFilter === "all" ? true : e.type === typeFilter)),
@@ -1163,7 +1190,9 @@ export default function EntryManager() {
     </>
   );
 
-  // ── Dedicated "Today's Updates" screen — admin/subadmin only ───────────
+  // ── Dedicated "Today's Updates" screen — admin/subadmin only. Sales
+  // falls through to the normal list view below because canSeeStats is
+  // false for sales. ────────────────────────────────────────────────────
   if (view === "activity" && canSeeStats) {
     return (
       <div className="space-y-4">
@@ -1180,9 +1209,12 @@ export default function EntryManager() {
     );
   }
 
-  // ── Dedicated "Due & overdue" screen — admin/subadmin only, replaces
-  // everything else while open ─────────────────────────────────────────
-  if (view === "due" && canSeeStats) {
+  // ── Dedicated "Due & overdue" screen — admin, subadmin, AND sales can
+  // open this. It only ever lists entries due today or overdue by up to
+  // NOT_VISITED_AFTER_DAYS days. The "Not Visited" section further down
+  // is gated separately by canSeeStats (admin/subadmin only), so sales
+  // never sees entries overdue by more than NOT_VISITED_AFTER_DAYS. ─────
+  if (view === "due" && canSeeDue) {
     return (
       <div className="space-y-4">
         <Toast toast={toast} />
@@ -1212,7 +1244,7 @@ export default function EntryManager() {
               <EntryCard
                 key={entry.id}
                 entry={entry}
-                canDelete={canSeeAll}
+                canDelete={canDelete}
                 onAction={(e, a) => openActionModal(e, a)}
                 onEdit={openEditModal}
                 onDelete={setDeleteTarget}
@@ -1222,10 +1254,11 @@ export default function EntryManager() {
           </div>
         )}
 
-        {/* Not Visited — overdue by more than 5 days, kept separate so it
-            doesn't clutter the fresh follow-up list above. Same admin/subadmin
-            gate + type filter as the rest of this screen. */}
-        {notVisitedEntries.length > 0 && (
+        {/* Not Visited — overdue by more than 5 days. Admin/subadmin only:
+            sales can open this "Due & overdue" screen (canSeeDue) but must
+            NOT see entries overdue by more than NOT_VISITED_AFTER_DAYS
+            days, so this whole section requires canSeeStats separately. */}
+        {canSeeStats && notVisitedEntries.length > 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <button
               onClick={() => setShowNotVisited((v) => !v)}
@@ -1246,7 +1279,7 @@ export default function EntryManager() {
                   <EntryCard
                     key={entry.id}
                     entry={entry}
-                    canDelete={canSeeAll}
+                    canDelete={canDelete}
                     onAction={(e, a) => openActionModal(e, a)}
                     onEdit={openEditModal}
                     onDelete={setDeleteTarget}
@@ -1274,27 +1307,31 @@ export default function EntryManager() {
           <span className="capitalize">{currentUser.role}</span> · {canSeeAll ? "viewing all entries" : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Today's Updates / Due & overdue: admin + subadmin only */}
+          {/* Today's Updates: admin + subadmin only. Sales will never see
+              this button because canSeeStats is false for "sales". */}
           {canSeeStats && (
-            <>
-              <button
-                onClick={() => setView("activity")}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Today&apos;s Updates
-              </button>
-              <button
-                onClick={() => setView("due")}
-                className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Due &amp; overdue
-                {dueEntries.length > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                    {dueEntries.length}
-                  </span>
-                )}
-              </button>
-            </>
+            <button
+              onClick={() => setView("activity")}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Today&apos;s Updates
+            </button>
+          )}
+          {/* Due & overdue: admin + subadmin + sales. Sales only ever sees
+              entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
+              days — "Not Visited" stays hidden for sales inside the screen. */}
+          {canSeeDue && (
+            <button
+              onClick={() => setView("due")}
+              className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Due &amp; overdue
+              {dueEntries.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {dueEntries.length}
+                </span>
+              )}
+            </button>
           )}
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
@@ -1444,7 +1481,7 @@ export default function EntryManager() {
             {/* Cards — small screens */}
             <div className="grid grid-cols-1 gap-3 p-4 sm:hidden">
               {filteredEntries.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} canDelete={canSeeAll} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} onOpenDetail={(e) => setDetailEntryId(e.id)} />
+                <EntryCard key={entry.id} entry={entry} canDelete={canDelete} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} onOpenDetail={(e) => setDetailEntryId(e.id)} />
               ))}
             </div>
 
@@ -1490,7 +1527,7 @@ export default function EntryManager() {
                       </td>
                       <td className="hidden px-5 py-3 text-slate-600 lg:table-cell">{entry.createdBy?.name} <span className="text-slate-400">({entry.createdBy?.role})</span></td>
                       <td className="px-5 py-3 text-right">
-                        <ActionMenu entry={entry} canDelete={canSeeAll} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} />
+                        <ActionMenu entry={entry} canDelete={canDelete} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} />
                       </td>
                     </tr>
                   ))}
