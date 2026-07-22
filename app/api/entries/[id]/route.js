@@ -23,6 +23,23 @@ const EDITABLE_FIELDS = [
   "nextMeetingDate",
 ];
 
+// Human-readable labels used to build the "what changed" summary stored on
+// the edit's history entry — this is what shows up in the detail popup's
+// History list and in Today's Updates.
+const FIELD_LABELS = {
+  mobile1: "Mobile No 1",
+  mobile2: "Mobile No 2",
+  name: "Name",
+  siteAddress: "Site Address",
+  permanentAddress: "Permanent Address",
+  profession: "Profession",
+  mistryName: "Mistry Name",
+  mistryNumber: "Mistry Number",
+  architectName: "Architect Name",
+  architectNumber: "Architect Number",
+  nextMeetingDate: "Next meeting date",
+};
+
 // A staff member may only read/edit entries they created themselves.
 // admin & sales can touch anything.
 function canAccess(session, entry) {
@@ -64,7 +81,10 @@ export async function GET(request, { params }) {
 }
 
 // PUT /api/entries/[id]
-// Regular field edit. Always appends an "edit" history item.
+// Regular field edit. Builds an exact "field: old → new" summary of every
+// changed field and stores it as the text on a single "edit" history
+// entry, so the popup and Today's Updates show precisely what was changed
+// instead of a generic "Details updated" message.
 export async function PUT(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -98,20 +118,24 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: false, message: "Name is required" }, { status: 400 });
     }
 
-    let changed = false;
+    const changeLines = [];
     for (const field of EDITABLE_FIELDS) {
       if (body[field] === undefined) continue;
       const value = typeof body[field] === "string" ? body[field].trim() : body[field];
-      if (value !== entry[field]) {
+      const oldValue = entry[field] || "";
+      if (value !== oldValue) {
+        const label = FIELD_LABELS[field] || field;
+        changeLines.push(`${label}: "${oldValue || "—"}" → "${value || "—"}"`);
         entry[field] = value;
-        changed = true;
       }
     }
 
+    const changed = changeLines.length > 0;
     if (changed) {
       entry.history.push({
         type: "edit",
-        text: "Details updated",
+        text: changeLines.join("; "),
+        tags: [],
         by: { id: session.user.id, name: session.user.name || "Unknown", role: session.user.role || "staff" },
         at: new Date(),
       });
@@ -133,8 +157,8 @@ export async function PUT(request, { params }) {
 }
 
 // DELETE /api/entries/[id]
-// Only admin/sales can delete — staff can edit their own mistakes but not
-// remove records outright.
+// Only admin/subadmin can delete — staff can edit their own mistakes but
+// not remove records outright.
 export async function DELETE(request, { params }) {
   try {
     const session = await getServerSession(authOptions);

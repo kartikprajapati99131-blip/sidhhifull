@@ -1,15 +1,19 @@
-// app/api/entries/[id]/action/route.js
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import mongoose from "mongoose";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ⚠️ adjust to your actual authOptions export path
 
 import dbConnect from "@/db/connectDb";
-import Entry from "@/models/Entry";
+import Entry, { VISIT_TAGS } from "@/models/Entry";
 import { serializeEntry } from "@/lib/serializeEntry";
 import { CAN_SEE_ALL_ROLES } from "../../route";
 
-const ACTIONS = ["call", "onsite", "cancel", "site-confirm"];
+// "visited" is a new action: log a site visit with a remark and an
+// optional Sittos/Magnus/CPL tag selection, without changing status.
+const ACTIONS = ["call", "onsite", "visited", "cancel", "site-confirm"];
+
+// Only these two actions collect Sittos/Magnus/CPL tags.
+const TAG_ACTIONS = ["site-confirm", "visited"];
 
 function canAccess(session, entry) {
   if (CAN_SEE_ALL_ROLES.includes(session.user.role)) return true;
@@ -17,9 +21,12 @@ function canAccess(session, entry) {
 }
 
 // POST /api/entries/[id]/action
-// body: { action: "call" | "onsite" | "cancel" | "site-confirm", text, nextMeetingDate }
+// body: { action: "call" | "onsite" | "visited" | "cancel" | "site-confirm", text, nextMeetingDate, tags }
 // Logs a history entry and, for cancel/site-confirm, updates status.
-// Call/on-site can optionally set a new next-meeting date.
+// Call/on-site can optionally set a new next-meeting date. Site-confirm and
+// visited can optionally carry a multi-select of Sittos/Magnus/CPL tags —
+// those get stamped on the history entry AND merged (unioned) onto the
+// entry's own `tags` field, which is what the tag filter reads.
 export async function POST(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -43,7 +50,7 @@ export async function POST(request, { params }) {
     }
 
     const body = await request.json().catch(() => null);
-    const { action, text, nextMeetingDate } = body || {};
+    const { action, text, nextMeetingDate, tags: rawTags } = body || {};
 
     if (!ACTIONS.includes(action)) {
       return NextResponse.json({ success: false, message: "Invalid action" }, { status: 400 });
@@ -55,17 +62,36 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: "This entry is already cancelled" }, { status: 400 });
     }
 
+    // Sanitize tags: only accept known values, and only for the two actions
+    // that support them — silently drop anything else so a bad client
+    // payload can't inject arbitrary strings into `tags`.
+    const tags =
+      TAG_ACTIONS.includes(action) && Array.isArray(rawTags)
+        ? rawTags.filter((t) => VISIT_TAGS.includes(t))
+        : [];
+
     entry.history.push({
       type: action,
       text: text?.trim() || "",
+      tags,
       by: { id: session.user.id, name: session.user.name || "Unknown", role: session.user.role || "staff" },
       at: new Date(),
     });
+    // Subdocument array pushes are auto-tracked, but mark it explicitly too —
+    // cheap insurance against this silently not persisting.
+    entry.markModified("history");
 
     if (action === "cancel") entry.status = "cancelled";
     if (action === "site-confirm") entry.status = "site-confirmed";
     if ((action === "call" || action === "onsite") && nextMeetingDate) {
       entry.nextMeetingDate = nextMeetingDate;
+    }
+    if (TAG_ACTIONS.includes(action) && tags.length) {
+      // Union this action's tags into the entry's cumulative tag list, so
+      // the tag filter (and the next time this modal opens) sees them.
+      const merged = Array.from(new Set([...(entry.tags || []), ...tags]));
+      entry.tags = merged;
+      entry.markModified("tags"); // belt-and-suspenders for the same reason as above
     }
 
     await entry.save();

@@ -1,5 +1,9 @@
-// models/Entry.js
 import mongoose from "mongoose";
+
+// Sittos / Magnus / CPL — multi-select tags picked when a "Confirm site" or
+// "Mark visited" action is logged. Kept in one place so the schema and the
+// action route both validate against the same list.
+export const VISIT_TAGS = ["Sittos", "Magnus", "CPL"];
 
 const ActorSchema = new mongoose.Schema(
   {
@@ -13,10 +17,13 @@ const ActorSchema = new mongoose.Schema(
 const HistorySchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["note", "call", "onsite", "cancel", "site-confirm", "edit"],
+    enum: ["note", "call", "onsite", "visited", "cancel", "site-confirm", "edit"],
     required: true,
   },
   text: { type: String, default: "" },
+  // Tags picked on THIS specific action (site-confirm / visited). Empty for
+  // every other history type.
+  tags: { type: [String], enum: VISIT_TAGS, default: [] },
   by: { type: ActorSchema, required: true },
   at: { type: Date, default: Date.now },
 });
@@ -46,15 +53,34 @@ const EntrySchema = new mongoose.Schema(
       default: "pending",
     },
 
+    // Cumulative Sittos/Magnus/CPL tags for this entry — the union of every
+    // tag ever picked on a "site-confirm" or "visited" action. This is what
+    // the tag filter (All/Sittos/Magnus/CPL) reads.
+    tags: { type: [String], enum: VISIT_TAGS, default: [] },
+
     createdBy: { type: ActorSchema, required: true },
     history: { type: [HistorySchema], default: [] },
   },
   { timestamps: true } // gives createdAt / updatedAt automatically
 );
 
-// Fast lookups for "my entries" and for the due-today/overdue notification query
+// Fast lookups for "my entries", the due-today/overdue query, and the
+// Sittos/Magnus/CPL tag filter.
 EntrySchema.index({ "createdBy.id": 1 });
 EntrySchema.index({ status: 1, nextMeetingDate: 1 });
 EntrySchema.index({ mobile1: 1 });
+EntrySchema.index({ tags: 1 });
+
+// ── Dev-mode cache buster ───────────────────────────────────────────────
+// Next.js dev servers hot-reload most files, but `mongoose.models.Entry`
+// is cached for the lifetime of the Node process. If you edit this schema
+// (add an enum value, add a field, etc.) while `next dev` is still running,
+// Mongoose will silently keep validating against the OLD compiled schema
+// until the process is fully restarted. This forces a fresh compile of the
+// schema on every reload in development, so schema edits actually take
+// effect without you having to remember to kill the server every time.
+if (process.env.NODE_ENV !== "production" && mongoose.models.Entry) {
+  delete mongoose.models.Entry;
+}
 
 export default mongoose.models.Entry || mongoose.model("Entry", EntrySchema);

@@ -67,6 +67,7 @@ const ACTION_TITLES = {
   call: "Log a call",
   onsite: "Log on-site visit",
   "site-confirm": "Confirm site",
+  visited: "Log a visit",
 };
 
 const ACTIVITY_FILTERS = [
@@ -74,6 +75,7 @@ const ACTIVITY_FILTERS = [
   { value: "added", label: "➕ Added" },
   { value: "call", label: "📞 Call" },
   { value: "onsite", label: "🏗️ On-site" },
+  { value: "visited", label: "🚩 Visited" },
   { value: "site-confirm", label: "✅ Confirmed" },
   { value: "cancel", label: "❌ Cancelled" },
   { value: "edit", label: "✏️ Edited" },
@@ -88,10 +90,62 @@ const TYPE_FILTERS = [
   { value: "mistry", label: "Mistry" },
 ];
 
-function TypeFilterToggle({ value, onChange, className = "" }) {
+// Sittos / Magnus / CPL tags. Picked (multi-select) whenever a "Confirm
+// site" or "Mark visited" action is logged; the tag FILTER below picks one
+// at a time (same "All / X / Y / Z" pattern as the type toggle) and is
+// shared across the main list, Today's Updates, and Due & overdue — exactly
+// like TYPE_FILTERS.
+const VISIT_TAGS = ["Sittos", "Magnus", "CPL"];
+
+const TAG_FILTERS = [
+  { value: "all", label: "All" },
+  ...VISIT_TAGS.map((t) => ({ value: t, label: t })),
+];
+
+// Customer-only filter: does this customer have a Mistry and/or an
+// Architect on file? Choosing anything other than "All" implicitly narrows
+// the list to customer entries, since mistry-type entries never carry
+// these fields.
+const REFERRAL_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "mistry", label: "Has Mistry" },
+  { value: "architect", label: "Has Architect" },
+];
+
+const hasMistryInfo = (e) => Boolean(e.mistryName?.trim() || e.mistryNumber?.trim());
+const hasArchitectInfo = (e) => Boolean(e.architectName?.trim() || e.architectNumber?.trim());
+
+// The full, current set of tags for an entry. Prefers the entry's own
+// `tags` field (set by the backend), but if that ever comes back empty —
+// e.g. an older API response, or a `serializeEntry` that hasn't been
+// updated to pass `tags` through — falls back to rebuilding it from the
+// history itself (every "site-confirm" / "visited" action's tags, unioned).
+// This is what EVERY tag filter and EVERY tag badge in this file reads, so
+// tag filtering keeps working even if the entry-level field is missing.
+function getEntryTags(entry) {
+  if (entry?.tags?.length) return entry.tags;
+  const set = new Set();
+  for (const h of entry?.history || []) {
+    if ((h.type === "site-confirm" || h.type === "visited") && h.tags?.length) {
+      h.tags.forEach((t) => set.add(t));
+    }
+  }
+  return Array.from(set);
+}
+
+// Turns a set of tags into one combined label in a fixed order, e.g.
+// picking Magnus then Sittos always displays as "Sittos-Magnus".
+function combineTags(tags) {
+  if (!tags || tags.length === 0) return "";
+  return VISIT_TAGS.filter((t) => tags.includes(t)).join("-");
+}
+
+// Generic pill-style filter toggle — used for both the Customer/Mistry
+// type filter and the Sittos/Magnus/CPL tag filter, wherever they appear.
+function FilterToggle({ options, value, onChange, className = "" }) {
   return (
-    <div className={`inline-flex rounded-lg border border-slate-300 bg-white p-0.5 ${className}`}>
-      {TYPE_FILTERS.map((o) => (
+    <div className={`inline-flex flex-wrap rounded-lg border border-slate-300 bg-white p-0.5 ${className}`}>
+      {options.map((o) => (
         <button
           key={o.value}
           type="button"
@@ -107,10 +161,24 @@ function TypeFilterToggle({ value, onChange, className = "" }) {
   );
 }
 
-// "Today's Updates" — every add / call / on-site / confirm / cancel / edit
-// across all entries currently visible to this user, newest first, with
-// Today/Yesterday/N-days-ago labels and an optional date range.
-function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOpenDetail }) {
+// Single combined tag badge — e.g. picking Sittos + Magnus always renders
+// as ONE pill reading "Sittos-Magnus", shown on cards / detail views
+// wherever an entry (or a single history item) carries visit tags.
+function TagBadge({ tags, size = "sm" }) {
+  const label = combineTags(tags);
+  if (!label) return null;
+  const cls = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-1.5 py-0.5 text-[10px]";
+  return (
+    <span className={`inline-flex items-center rounded-full bg-teal-50 font-medium text-teal-700 ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+// "Today's Updates" — every add / call / on-site / visit / confirm / cancel
+// / edit across all entries currently visible to this user, newest first,
+// with Today/Yesterday/N-days-ago labels and an optional date range.
+function ActivityLogView({ entries, typeFilter, onTypeFilterChange, tagFilter, onTagFilterChange, onBack, onOpenDetail }) {
   const [filter, setFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -121,6 +189,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOp
 
   const filtered = feed.filter((a) => {
     if (typeFilter !== "all" && a.entry.type !== typeFilter) return false;
+    if (tagFilter !== "all" && !getEntryTags(a.entry).includes(tagFilter)) return false;
     if (filter !== "all" && a.activity !== filter) return false;
     if (hasCustomRange) return isWithinRange(a.time, dateFrom, dateTo);
     return true;
@@ -141,14 +210,17 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOp
           <span className="hidden sm:inline">Back to entries</span>
         </button>
         <h2 className="text-base font-semibold text-slate-800">Today&apos;s Updates</h2>
-        <TypeFilterToggle value={typeFilter} onChange={onTypeFilterChange} className="ml-auto" />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={onTagFilterChange} />
+          <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={onTypeFilterChange} />
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-800">All Updates</h3>
-            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">Every remark — new entries, calls, on-site visits, confirmations, cancellations, edits</p>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">Every remark — new entries, calls, on-site visits, visit logs, confirmations, cancellations, edits</p>
           </div>
           <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">{todayCount} today</span>
         </div>
@@ -254,6 +326,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOp
                     <span className={`font-medium text-xs ${isToday(a.time) ? "text-sky-600" : "text-slate-500"}`}>{getDayLabel(a.time)}</span>
                   </div>
                   <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.bg} ${meta.text}`}>{meta.label}</span>
+                  {a.tags?.length > 0 && <TagBadge tags={a.tags} />}
                   {a.text && <p className="mt-1 text-xs text-slate-600">{a.text}</p>}
                   <p className="mt-1 text-[11px] text-slate-400">{a.by?.name} · {formatTimeOnly(a.time)}</p>
                 </button>
@@ -290,6 +363,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOp
                       </td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${meta.bg} ${meta.text}`}>{meta.label}</span>
+                        {a.tags?.length > 0 && <TagBadge tags={a.tags} />}
                       </td>
                       <td className="max-w-[260px] px-5 py-3 text-xs text-slate-600">{a.text || <span className="text-slate-400">—</span>}</td>
                       <td className="px-5 py-3 text-xs text-slate-600">{a.by?.name}</td>
@@ -311,6 +385,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, onBack, onOp
 
 const ACTION_MENU_ITEMS = [
   { action: "site-confirm", label: "Confirm site" },
+  { action: "visited", label: "Mark visited" },
   { action: "call", label: "Log call" },
   { action: "onsite", label: "Log on-site" },
   { action: "cancel", label: "Cancel", danger: true },
@@ -320,6 +395,7 @@ const HISTORY_LABEL = {
   note: "Note",
   call: "Called",
   onsite: "On-site Visit",
+  visited: "Visited",
   cancel: "Cancelled",
   "site-confirm": "Site Confirmed",
   edit: "Edited",
@@ -329,6 +405,7 @@ const HISTORY_DOT = {
   note: "bg-slate-400",
   call: "bg-sky-500",
   onsite: "bg-violet-500",
+  visited: "bg-teal-500",
   cancel: "bg-rose-500",
   "site-confirm": "bg-emerald-500",
   edit: "bg-amber-500",
@@ -411,6 +488,7 @@ const ACTIVITY_META = {
   note: { label: "📝 Note added", bg: "bg-slate-50", text: "text-slate-700" },
   call: { label: "📞 Call logged", bg: "bg-sky-50", text: "text-sky-700" },
   onsite: { label: "🏗️ On-site visit", bg: "bg-violet-50", text: "text-violet-700" },
+  visited: { label: "🚩 Visited", bg: "bg-teal-50", text: "text-teal-700" },
   "site-confirm": { label: "✅ Site confirmed", bg: "bg-emerald-50", text: "text-emerald-700" },
   cancel: { label: "❌ Cancelled", bg: "bg-rose-50", text: "text-rose-700" },
   edit: { label: "✏️ Details edited", bg: "bg-amber-50", text: "text-amber-700" },
@@ -429,6 +507,7 @@ function buildActivityFeed(entries) {
         time: entry.createdAt,
         by: entry.createdBy,
         text: "",
+        tags: [],
       });
     }
     for (const h of entry.history || []) {
@@ -439,6 +518,7 @@ function buildActivityFeed(entries) {
         time: h.at,
         by: h.by,
         text: h.text,
+        tags: h.tags || [],
       });
     }
   }
@@ -494,8 +574,9 @@ function Field({ field, value, onChange }) {
   );
 }
 
-// One dropdown holding every status action (Confirm / Call / On-site / Cancel)
-// plus Edit and (if allowed) Delete — replaces the old row of separate buttons.
+// One dropdown holding every status action (Confirm / Visited / Call /
+// On-site / Cancel) plus Edit and (if allowed) Delete — replaces the old
+// row of separate buttons.
 function ActionMenu({ entry, canDelete, onAction, onEdit, onDelete, align = "right" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -559,12 +640,13 @@ function ActionMenu({ entry, canDelete, onAction, onEdit, onDelete, align = "rig
   );
 }
 
+// Always renders — shows "—" instead of hiding the row when a field is
+// empty, so the popup reads as a complete record rather than a sparse one.
 function DetailRow({ label, value }) {
-  if (!value) return null;
   return (
     <div>
       <dt className="text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="text-sm text-slate-800">{value}</dd>
+      <dd className="text-sm text-slate-800">{value || <span className="text-slate-400">—</span>}</dd>
     </div>
   );
 }
@@ -590,6 +672,7 @@ function DetailModal({ entry, onClose }) {
                   {entry.nextMeetingDate === todayStr() ? "Due today" : "Overdue"}
                 </span>
               )}
+              <TagBadge tags={getEntryTags(entry)} />
             </div>
             <h3 className="mt-1.5 text-lg font-semibold text-slate-900">{entry.name || "—"}</h3>
           </div>
@@ -600,6 +683,7 @@ function DetailModal({ entry, onClose }) {
           <DetailRow label="Mobile No 1" value={entry.mobile1 && <CallLink number={entry.mobile1} />} />
           <DetailRow label="Mobile No 2" value={entry.mobile2 && <CallLink number={entry.mobile2} />} />
           <DetailRow label="Next meeting date" value={entry.nextMeetingDate} />
+          <DetailRow label="Tags" value={combineTags(getEntryTags(entry)) || null} />
 
           {isCustomer && (
             <>
@@ -630,6 +714,7 @@ function DetailModal({ entry, onClose }) {
                 <div>
                   <span className="font-medium text-slate-700">{HISTORY_LABEL[h.type]}</span>
                   <span className="text-slate-400"> · {h.by?.name} ({h.by?.role}) · {fmtDateTime(h.at)}</span>
+                  {h.tags?.length > 0 && <div className="mt-1"><TagBadge tags={h.tags} size="xs" /></div>}
                   {h.text && <p className="mt-0.5 text-slate-600">{h.text}</p>}
                 </div>
               </div>
@@ -657,6 +742,7 @@ function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail 
               {entry.type === "customer" ? "Customer" : "Mistry"}
             </span>
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[entry.status]}`}>{entry.status}</span>
+            <TagBadge tags={getEntryTags(entry)} />
           </div>
           <h3 className="mt-1.5 text-sm font-semibold text-slate-900">{entry.name || "—"}</h3>
         </div>
@@ -680,6 +766,12 @@ function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail 
             )}
           </div>
         )}
+        {entry.type === "customer" && (hasMistryInfo(entry) || hasArchitectInfo(entry)) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hasMistryInfo(entry) && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">Has Mistry</span>}
+            {hasArchitectInfo(entry) && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">Has Architect</span>}
+          </div>
+        )}
         <div><dt className="inline font-medium text-slate-500">Added by: </dt><dd className="inline">{entry.createdBy?.name} ({entry.createdBy?.role})</dd></div>
       </dl>
 
@@ -696,6 +788,7 @@ function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail 
               {entry.history.slice().reverse().map((h) => (
                 <li key={h.id}>
                   <span className="font-medium capitalize text-slate-700">{h.type.replace("-", " ")}</span> · {h.by?.name} · {fmtDateTime(h.at)}
+                  {h.tags?.length > 0 && <TagBadge tags={h.tags} size="xs" />}
                   {h.text && <div className="text-slate-500">{h.text}</div>}
                 </li>
               ))}
@@ -816,6 +909,7 @@ export default function EntryManager() {
   const [actionModal, setActionModal] = useState(null); // { entry, action }
   const [actionText, setActionText] = useState("");
   const [actionNextDate, setActionNextDate] = useState("");
+  const [actionTags, setActionTags] = useState([]); // Sittos/Magnus/CPL — used by site-confirm & visited
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [duplicateWarning, setDuplicateWarning] = useState(null);
@@ -824,6 +918,8 @@ export default function EntryManager() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared by list, Today's Updates, Due & overdue
+  const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere, same as typeFilter
+  const [referralFilter, setReferralFilter] = useState("all"); // "all" | "mistry" | "architect" — customer-only, main list
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -873,19 +969,33 @@ export default function EntryManager() {
     }
   }, [view, canSeeDue, canSeeStats]);
 
-  const typeFilteredEntries = useMemo(
-    () => entries.filter((e) => (typeFilter === "all" ? true : e.type === typeFilter)),
-    [entries, typeFilter]
+  // Base pipeline shared by the main list, the Due & overdue screen, and
+  // (indirectly, via its own props) Today's Updates: entry type + visit
+  // tag. Everything else (status, referral, search, date range) only
+  // applies to the main "Entries" list further down.
+  const baseFilteredEntries = useMemo(
+    () =>
+      entries.filter((e) => {
+        if (typeFilter !== "all" && e.type !== typeFilter) return false;
+        if (tagFilter !== "all" && !getEntryTags(e).includes(tagFilter)) return false;
+        return true;
+      }),
+    [entries, typeFilter, tagFilter]
   );
 
-  const dueEntries = useMemo(() => typeFilteredEntries.filter(isDueOrOverdue), [typeFilteredEntries]);
-  const notVisitedEntries = useMemo(() => typeFilteredEntries.filter(isNotVisited), [typeFilteredEntries]);
+  const dueEntries = useMemo(() => baseFilteredEntries.filter(isDueOrOverdue), [baseFilteredEntries]);
+  const notVisitedEntries = useMemo(() => baseFilteredEntries.filter(isNotVisited), [baseFilteredEntries]);
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return typeFilteredEntries
+    return baseFilteredEntries
       .filter((e) => (statusFilter === "all" ? true : e.status === statusFilter))
+      .filter((e) => {
+        if (referralFilter === "all") return true;
+        if (e.type !== "customer") return false;
+        return referralFilter === "mistry" ? hasMistryInfo(e) : hasArchitectInfo(e);
+      })
       .filter((e) => {
         if (!canSeeStats) return true;
         if (!fromDate && !toDate) return true;
@@ -900,13 +1010,26 @@ export default function EntryManager() {
           e.name?.toLowerCase().includes(q) ||
           e.mobile1?.includes(q) ||
           e.mobile2?.includes(q) ||
-          e.siteAddress?.toLowerCase().includes(q)
+          e.siteAddress?.toLowerCase().includes(q) ||
+          e.permanentAddress?.toLowerCase().includes(q) ||
+          e.mistryName?.toLowerCase().includes(q) ||
+          e.mistryNumber?.includes(q) ||
+          e.architectName?.toLowerCase().includes(q) ||
+          e.architectNumber?.includes(q)
         );
       });
-  }, [typeFilteredEntries, search, statusFilter, fromDate, toDate, canSeeStats]);
+  }, [baseFilteredEntries, search, statusFilter, referralFilter, fromDate, toDate, canSeeStats]);
 
   const hasDateFilter = canSeeStats && !!(fromDate || toDate);
-  const clearFilters = () => { setSearch(""); setStatusFilter("all"); setTypeFilter("all"); setFromDate(""); setToDate(""); };
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setTagFilter("all");
+    setReferralFilter("all");
+    setFromDate("");
+    setToDate("");
+  };
 
   // ── Add entry ──────────────────────────────────────────────────────────
   function updateField(name, value) {
@@ -1023,7 +1146,7 @@ export default function EntryManager() {
     }
   };
 
-  // ── Delete (admin/sales only) ─────────────────────────────────────────
+  // ── Delete (admin/subadmin only) ────────────────────────────────────────
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setSubmitting(true);
@@ -1044,11 +1167,20 @@ export default function EntryManager() {
     }
   };
 
-  // ── Status actions: call / onsite / cancel / site-confirm ──────────────
+  // ── Status / activity actions: call / onsite / visited / cancel /
+  // site-confirm. "site-confirm" and "visited" additionally collect a
+  // multi-select of Sittos/Magnus/CPL tags, which get merged onto the
+  // entry (so the tag filter can find it) as well as stamped on this one
+  // history entry (so Today's Updates can show exactly what was picked).
   function openActionModal(entry, action) {
     setActionModal({ entry, action });
     setActionText("");
     setActionNextDate(entry.nextMeetingDate || "");
+    setActionTags([]);
+  }
+
+  function toggleActionTag(tag) {
+    setActionTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   }
 
   const submitAction = async () => {
@@ -1058,6 +1190,7 @@ export default function EntryManager() {
       showToast("A reason is required to cancel", "error");
       return;
     }
+    const needsTags = action === "site-confirm" || action === "visited";
     setSubmitting(true);
     try {
       const res = await fetch(`/api/entries/${entry.id}/action`, {
@@ -1067,6 +1200,7 @@ export default function EntryManager() {
           action,
           text: actionText.trim(),
           nextMeetingDate: action === "call" || action === "onsite" ? actionNextDate : undefined,
+          tags: needsTags ? actionTags : undefined,
         }),
       });
       const data = await res.json();
@@ -1086,6 +1220,7 @@ export default function EntryManager() {
 
   const fields = entryType === "customer" ? CUSTOMER_FIELDS : MISTRY_FIELDS;
   const editFields = editEntryType === "customer" ? CUSTOMER_FIELDS : MISTRY_FIELDS;
+  const actionNeedsTags = actionModal && (actionModal.action === "site-confirm" || actionModal.action === "visited");
 
   // ── Shared modals (used by both the list view and the due view) ────────
   const modals = (
@@ -1131,6 +1266,28 @@ export default function EntryManager() {
               placeholder={actionModal.action === "cancel" ? "Reason for cancelling…" : "Optional remark…"}
               className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
+            {actionNeedsTags && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Tags (optional, pick any that apply)</label>
+                <div className="flex flex-wrap gap-2">
+                  {VISIT_TAGS.map((tag) => {
+                    const active = actionTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleActionTag(tag)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                          active ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {(actionModal.action === "call" || actionModal.action === "onsite") && (
               <div className="mt-3">
                 <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
@@ -1201,6 +1358,8 @@ export default function EntryManager() {
           entries={entries}
           typeFilter={typeFilter}
           onTypeFilterChange={setTypeFilter}
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
           onBack={() => setView("list")}
           onOpenDetail={(id) => setDetailEntryId(id)}
         />
@@ -1230,7 +1389,10 @@ export default function EntryManager() {
             <h2 className="text-base font-semibold text-slate-800">Due &amp; overdue</h2>
             <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">{dueEntries.length}</span>
           </div>
-          <TypeFilterToggle value={typeFilter} onChange={setTypeFilter} />
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
+            <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
+          </div>
         </div>
         <p className="text-xs text-slate-500">Meetings due today or overdue by up to {NOT_VISITED_AFTER_DAYS} days. Anything older moves to Not Visited below.</p>
 
@@ -1397,9 +1559,13 @@ export default function EntryManager() {
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-medium text-slate-600">Entry type</label>
-          <TypeFilterToggle value={typeFilter} onChange={setTypeFilter} />
+          <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
         </div>
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <label className="text-xs font-medium text-slate-600">Tag</label>
+          <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
+        </div>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
             <div className="relative">
@@ -1407,7 +1573,7 @@ export default function EntryManager() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Name, mobile, address…"
+                placeholder="Name, mobile, address, mistry, architect…"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-8 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               {search && (
@@ -1426,6 +1592,18 @@ export default function EntryManager() {
               <option value="pending">Pending</option>
               <option value="site-confirmed">Site Confirmed</option>
               <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Referral</label>
+            <select
+              value={referralFilter}
+              onChange={(e) => setReferralFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              {REFERRAL_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
             </select>
           </div>
           {canSeeStats && (
@@ -1453,7 +1631,7 @@ export default function EntryManager() {
             </div>
           )}
         </div>
-        {(search || statusFilter !== "all" || typeFilter !== "all" || hasDateFilter) && (
+        {(search || statusFilter !== "all" || typeFilter !== "all" || tagFilter !== "all" || referralFilter !== "all" || hasDateFilter) && (
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-slate-500">Filtering by next meeting date{hasDateFilter ? "" : " (none set)"}</span>
             <button onClick={clearFilters} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>
@@ -1466,7 +1644,7 @@ export default function EntryManager() {
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-800">Entries</h2>
           <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            {filteredEntries.length} {search || statusFilter !== "all" || typeFilter !== "all" || hasDateFilter ? "found" : "total"}
+            {filteredEntries.length} {search || statusFilter !== "all" || typeFilter !== "all" || tagFilter !== "all" || referralFilter !== "all" || hasDateFilter ? "found" : "total"}
           </span>
         </div>
 
@@ -1502,7 +1680,10 @@ export default function EntryManager() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredEntries.map((entry) => (
                     <tr key={entry.id} onClick={() => setDetailEntryId(entry.id)} className="cursor-pointer align-top hover:bg-slate-50">
-                      <td className="px-5 py-3 font-medium text-slate-800">{entry.name || "—"}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">
+                        {entry.name || "—"}
+                        <TagBadge tags={getEntryTags(entry)} size="xs" />
+                      </td>
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${entry.type === "customer" ? "bg-indigo-50 text-indigo-700" : "bg-orange-50 text-orange-700"}`}>
                           {entry.type === "customer" ? "Customer" : "Mistry"}
