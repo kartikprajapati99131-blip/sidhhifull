@@ -11,7 +11,7 @@ export default function Navbar() {
   const [staffOpen, setStaffOpen] = useState(false);
   const [mistryOpen, setMistryOpen] = useState(false);
   const [subAdminOpen, setSubAdminOpen] = useState(false);
-  
+
   const dropRef = useRef(null);
 
   const isAdmin = session?.user?.role === "admin";
@@ -46,6 +46,8 @@ export default function Navbar() {
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
         { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
+        { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
+
 
       ],
     },
@@ -127,7 +129,9 @@ export default function Navbar() {
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/followup", label: "Follow-ups", dot: "bg-teal-500" },
+                        { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
+
                         { href: `/reviews/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
@@ -154,6 +158,8 @@ export default function Navbar() {
                       {[
                         { href: "/customer", label: "Customer lead", dot: "bg-sky-500" },
                         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
+                        { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
+
                         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
                         { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
@@ -346,6 +352,8 @@ export default function Navbar() {
                       {[
                         { href: `/profile/${session.user.id}`, label: "Profile", dot: "bg-slate-400" },
                         { href: "/attandance", label: "Attendance", dot: "bg-teal-500" },
+                        { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
+
                         { href: "/due-payments", label: "Reminders", dot: "bg-red-500" },
                         { href: "/customer", label: "Customers", dot: "bg-sky-500" },
                         { href: `/rewiew/${session.user.id}`, label: "Your Review", dot: "bg-rose-400" },
