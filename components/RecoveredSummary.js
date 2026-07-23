@@ -2,9 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const ADMIN_USER = "Kartik";
-const ADMIN_PASS = "PK";
-
 const FILTERS = [
   { label: "Today", value: "today" },
   { label: "This Week", value: "week" },
@@ -55,88 +52,7 @@ function isInRange(date, filter) {
   return true; // all time
 }
 
-// ── Password gate ──────────────────────────────────────────────
-function PasswordGate({ onUnlock }) {
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
-
-  const attempt = () => {
-    if (user.trim() === ADMIN_USER && pass === ADMIN_PASS) {
-      onUnlock();
-    } else {
-      setErr("Incorrect username or password.");
-      setPass("");
-    }
-  };
-
-  return (
-    <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="w-full max-w-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-600">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-          <div>
-            <div className="text-sm font-bold text-slate-800">Restricted Section</div>
-            <div className="text-xs text-slate-400">Amount Recovered is access-controlled</div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Username
-            </label>
-            <input
-              type="text"
-              value={user}
-              onChange={(e) => { setUser(e.target.value); setErr(""); }}
-              onKeyDown={(e) => e.key === "Enter" && attempt()}
-              placeholder="Username"
-              autoComplete="username"
-              className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${
-                err ? "border-red-400" : "border-slate-300"
-              }`}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Password
-            </label>
-            <input
-              type="password"
-              value={pass}
-              onChange={(e) => { setPass(e.target.value); setErr(""); }}
-              onKeyDown={(e) => e.key === "Enter" && attempt()}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${
-                err ? "border-red-400" : "border-slate-300"
-              }`}
-            />
-          </div>
-
-          {err && <div className="text-xs font-medium text-red-600">{err}</div>}
-
-          <button
-            onClick={attempt}
-            className="mt-1 w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
-          >
-            Unlock
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function RecoveredSummary() {
-  const [unlocked, setUnlocked] = useState(false);
-
   const [allCompleted, setAllCompleted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -161,11 +77,8 @@ export default function RecoveredSummary() {
   }, []);
 
   useEffect(() => {
-    if (unlocked) fetchCompleted();
-  }, [unlocked, fetchCompleted]);
-
-  // Show gate until unlocked
-  if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />;
+    fetchCompleted();
+  }, [fetchCompleted]);
 
   const filtered = allCompleted.filter((e) =>
     isInRange(e.completedAt, filter)

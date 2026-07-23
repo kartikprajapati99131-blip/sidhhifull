@@ -30,7 +30,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { paymentMethod, amountGiven, accountStatus, remainingAmount } = body;
+    const { paymentMethod, amountGiven, accountStatus, remainingAmount, newDueDate } = body;
 
     if (!paymentMethod || !["cash", "check"].includes(paymentMethod)) {
       return NextResponse.json(
@@ -51,6 +51,23 @@ export async function PUT(request, { params }) {
         { success: false, message: "Account status must be 'closed' or 'continue'" },
         { status: 400 }
       );
+    }
+
+    let parsedNewDueDate = null;
+    if (accountStatus === "continue" && Number(remainingAmount) > 0) {
+      if (!newDueDate) {
+        return NextResponse.json(
+          { success: false, message: "A new due date is required to continue the account" },
+          { status: 400 }
+        );
+      }
+      parsedNewDueDate = new Date(newDueDate);
+      if (isNaN(parsedNewDueDate.getTime())) {
+        return NextResponse.json(
+          { success: false, message: "Invalid new due date" },
+          { status: 400 }
+        );
+      }
     }
 
     const existingEntry = await DuePayment.findById(id);
@@ -86,7 +103,7 @@ export async function PUT(request, { params }) {
       newEntry = await DuePayment.create({
         customerName: existingEntry.customerName,
         amount: Number(remainingAmount),
-        dueDate: new Date(), // starts due today — admin can reschedule via follow-up
+        dueDate: parsedNewDueDate, // chosen by the admin in the Complete modal
         mobile: existingEntry.mobile,
         note: `Remaining from partial payment on ${new Date().toLocaleDateString("en-IN")}${existingEntry.note ? ". " + existingEntry.note : ""}`,
         status: "pending",

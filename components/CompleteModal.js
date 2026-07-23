@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 
+// Today's date as "YYYY-MM-DD", used as the min for the reschedule date input.
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function CompleteModal({ entry, onClose, onSuccess, showToast }) {
   const [paymentMethod, setPaymentMethod] = useState(""); // "cash" | "check"
   const [amountGiven, setAmountGiven] = useState("");
   const [accountStatus, setAccountStatus] = useState(""); // "closed" | "continue"
+  const [newDueDate, setNewDueDate] = useState(""); // reschedule date when continuing
   const [submitting, setSubmitting] = useState(false);
 
   if (!entry) return null;
@@ -19,7 +25,8 @@ export default function CompleteModal({ entry, onClose, onSuccess, showToast }) 
     amountGiven !== "" &&
     given >= 0 &&
     given <= totalAmount &&
-    accountStatus;
+    accountStatus &&
+    (accountStatus !== "continue" || Boolean(newDueDate));
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -34,6 +41,7 @@ export default function CompleteModal({ entry, onClose, onSuccess, showToast }) 
           amountGiven: given,
           accountStatus,
           remainingAmount: accountStatus === "continue" ? remaining : 0,
+          newDueDate: accountStatus === "continue" ? newDueDate : undefined,
         }),
       });
       const data = await res.json();
@@ -138,7 +146,7 @@ export default function CompleteModal({ entry, onClose, onSuccess, showToast }) 
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setAccountStatus("closed")}
+                  onClick={() => { setAccountStatus("closed"); setNewDueDate(""); }}
                   className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
                     accountStatus === "closed"
                       ? "border-emerald-500 bg-emerald-50 text-emerald-700"
@@ -162,15 +170,34 @@ export default function CompleteModal({ entry, onClose, onSuccess, showToast }) 
               </div>
 
               {accountStatus === "continue" && (
-                <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm">
-                  <p className="text-amber-800 font-medium">
-                    Partial payment recorded
-                  </p>
-                  <p className="text-amber-700 mt-0.5">
-                    ₹{given.toLocaleString("en-IN")} collected now.{" "}
-                    <strong>₹{remaining.toLocaleString("en-IN")}</strong>{" "}
-                    will remain as new due amount.
-                  </p>
+                <div className="mt-3 space-y-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm">
+                  <div>
+                    <p className="text-amber-800 font-medium">
+                      Partial payment recorded
+                    </p>
+                    <p className="text-amber-700 mt-0.5">
+                      ₹{given.toLocaleString("en-IN")} collected now.{" "}
+                      <strong>₹{remaining.toLocaleString("en-IN")}</strong>{" "}
+                      will remain as new due amount.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-amber-800">
+                      New Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={newDueDate}
+                      min={todayStr()}
+                      onChange={(e) => setNewDueDate(e.target.value)}
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    />
+                    {!newDueDate && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        Pick when the remaining amount should be due.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
