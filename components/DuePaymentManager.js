@@ -173,6 +173,9 @@ export default function DuePaymentManager() {
   const [searchTerm, setSearchTerm] = useState("");
   const [referenceFilter, setReferenceFilter] = useState(""); // "" = All
 
+  // Alphabetical sort toggle ("" = no sort / default order, "asc" = A→Z, "desc" = Z→A)
+  const [sortAlpha, setSortAlpha] = useState("");
+
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -210,10 +213,10 @@ export default function DuePaymentManager() {
     fetchReferences();
   }, [fetchEntries, fetchReferences]);
 
-  // ---- Combined filter: search + reference ----
+  // ---- Combined filter + sort: search + reference + alphabetical ----
   const filteredEntries = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return entries.filter((entry) => {
+    const result = entries.filter((entry) => {
       // Reference filter
       if (referenceFilter) {
         const ref = (entry.referencedBy || "").trim();
@@ -228,7 +231,23 @@ export default function DuePaymentManager() {
       }
       return true;
     });
-  }, [entries, searchTerm, referenceFilter]);
+
+    if (sortAlpha) {
+      result.sort((a, b) => {
+        const cmp = (a.customerName || "").localeCompare(b.customerName || "", "en", {
+          sensitivity: "base",
+        });
+        return sortAlpha === "desc" ? -cmp : cmp;
+      });
+    }
+
+    return result;
+  }, [entries, searchTerm, referenceFilter, sortAlpha]);
+
+  // Cycle: off → A→Z → Z→A → off
+  const toggleSortAlpha = () => {
+    setSortAlpha((prev) => (prev === "" ? "asc" : prev === "asc" ? "desc" : ""));
+  };
 
   // ---- Add entry ----
   const handleFormChange = (e) => {
@@ -536,6 +555,26 @@ export default function DuePaymentManager() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* A–Z sort toggle */}
+            <button
+              type="button"
+              onClick={toggleSortAlpha}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                sortAlpha
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              title="Sort alphabetically by name"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m6 6l3-3m0 0l3 3m-3-3v12" />
+              </svg>
+              {sortAlpha === "desc" ? "Z–A" : "A–Z"}
+            </button>
+
             {/* Reference filter dropdown */}
             <div className="relative">
               <select
