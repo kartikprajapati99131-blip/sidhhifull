@@ -5,6 +5,8 @@ import PDFDocument from "pdfkit";
 
 export const runtime = "nodejs";
 
+const COMPANY_NAME = "SIDDHI GLASS & PLYWOOD CENTER";
+
 export async function GET(req) {
   await connectDb();
   await requireAdmin();
@@ -23,6 +25,8 @@ export async function GET(req) {
   doc.on("data", (chunk) => chunks.push(chunk));
   const done = new Promise((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
 
+  doc.fontSize(18).font("Helvetica-Bold").fillColor("#000").text(COMPANY_NAME, { align: "center" });
+  doc.moveDown(0.2);
   doc.fontSize(16).font("Helvetica-Bold").text("Bank Salary Statement", { align: "center" });
   doc.moveDown(0.3);
   doc.fontSize(10).font("Helvetica").fillColor("#555").text(`Period: ${from} to ${to}`, { align: "center" });
@@ -32,7 +36,7 @@ export async function GET(req) {
 
   const drawHeader = (y) => {
     doc.fontSize(10).font("Helvetica-Bold").fillColor("#000");
-    doc.text("Employee Name", colX.name, y);
+    doc.text("Bank Name", colX.name, y);
     doc.text("Account No.", colX.acc, y);
     doc.text("IFSC Code", colX.ifsc, y);
     doc.text("Amount (Rs.)", colX.amount, y);
@@ -53,7 +57,7 @@ export async function GET(req) {
       drawHeader(y);
       y += 25;
     }
-    doc.text(emp.name, colX.name, y, { width: 150 });
+    doc.text(emp.bankName || emp.name, colX.name, y, { width: 150 });
     doc.text(emp.accountNumber || "-", colX.acc, y, { width: 140 });
     doc.text(emp.ifscCode || "-", colX.ifsc, y, { width: 110 });
     doc.text(emp.totalIncome.toFixed(2), colX.amount, y, { width: 80 });
@@ -63,6 +67,23 @@ export async function GET(req) {
 
   doc.moveTo(40, y + 5).lineTo(555, y + 5).strokeColor("#ccc").stroke();
   doc.font("Helvetica-Bold").text(`Total: Rs. ${grandTotal.toFixed(2)}`, colX.amount, y + 12);
+
+  // Authorised Signature & Stamp block at the bottom
+  const sigBlockHeight = 100;
+  if (y + 12 + sigBlockHeight > 780) {
+    doc.addPage();
+    y = 40;
+  } else {
+    y += 12;
+  }
+
+  const sigY = 780 - sigBlockHeight > y + 40 ? 780 - sigBlockHeight : y + 40;
+
+  doc.moveTo(40, sigY).lineTo(200, sigY).strokeColor("#999").stroke();
+  doc.fontSize(10).font("Helvetica").fillColor("#333").text("Authorised Signature", 40, sigY + 5);
+
+  doc.moveTo(395, sigY).lineTo(555, sigY).strokeColor("#999").stroke();
+  doc.fontSize(10).font("Helvetica").fillColor("#333").text("Company Stamp", 395, sigY + 5);
 
   doc.end();
   const pdfBuffer = await done;
