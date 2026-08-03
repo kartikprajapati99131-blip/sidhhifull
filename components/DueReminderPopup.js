@@ -289,7 +289,8 @@ function WhatsAppReminderSender({ entries }) {
 }
 
 // ── Reusable reminder entry card (used both inline and in the popup sheet) ──
-function EntryCard({ entry, onEdit, onFollowUp, onOnsite }) {
+function EntryCard({ entry, onEdit, onFollowUp, onOnsite, onNoAnswer, onHistory }) {
+  const historyCount = (entry.rescheduleHistory || []).length;
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
       <div className="min-w-0">
@@ -336,6 +337,18 @@ function EntryCard({ entry, onEdit, onFollowUp, onOnsite }) {
         >
           On-site
         </button>
+        <button
+          onClick={() => onNoAnswer(entry)}
+          className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100 sm:py-1.5"
+        >
+          No Answer
+        </button>
+        <button
+          onClick={() => onHistory(entry)}
+          className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:py-1.5"
+        >
+          🕑 History{historyCount > 0 ? ` (${historyCount})` : ""}
+        </button>
       </div>
     </div>
   );
@@ -364,9 +377,20 @@ export default function DueReminderPopup({ inlineMode = false }) {
 
   const [followUpEntry, setFollowUpEntry] = useState(null);
   const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpRemark, setFollowUpRemark] = useState("");
+  const [followUpCollected, setFollowUpCollected] = useState("");
 
   const [onsiteEntry, setOnsiteEntry] = useState(null);
   const [onsiteDate, setOnsiteDate] = useState("");
+  const [onsiteRemark, setOnsiteRemark] = useState("");
+  const [onsiteCollected, setOnsiteCollected] = useState("");
+
+  // ----- No Call (log-only, no date change) -----
+  const [noAnswerEntry, setNoAnswerEntry] = useState(null);
+  const [noAnswerRemark, setNoAnswerRemark] = useState("");
+
+  // ----- History (count) toggle / detail popup -----
+  const [historyEntry, setHistoryEntry] = useState(null);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -551,8 +575,18 @@ export default function DueReminderPopup({ inlineMode = false }) {
   };
 
   // ----- Follow Up (call reschedule) -----
-  const openFollowUpModal = (entry) => { setFollowUpEntry(entry); setFollowUpDate(""); };
-  const closeFollowUpModal = () => { setFollowUpEntry(null); setFollowUpDate(""); };
+  const openFollowUpModal = (entry) => {
+    setFollowUpEntry(entry);
+    setFollowUpDate("");
+    setFollowUpRemark("");
+    setFollowUpCollected("");
+  };
+  const closeFollowUpModal = () => {
+    setFollowUpEntry(null);
+    setFollowUpDate("");
+    setFollowUpRemark("");
+    setFollowUpCollected("");
+  };
 
   const handleFollowUpSave = async (e) => {
     e.preventDefault();
@@ -563,7 +597,12 @@ export default function DueReminderPopup({ inlineMode = false }) {
       const res = await fetch(`/api/due-payments/${followUpEntry._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isFollowUp: true, dueDate: followUpDate }),
+        body: JSON.stringify({
+          isFollowUp: true,
+          dueDate: followUpDate,
+          remark: followUpRemark,
+          collectedAmount: followUpCollected ? Number(followUpCollected) : 0,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -581,8 +620,18 @@ export default function DueReminderPopup({ inlineMode = false }) {
   };
 
   // ----- On-site Reschedule -----
-  const openOnsiteModal = (entry) => { setOnsiteEntry(entry); setOnsiteDate(""); };
-  const closeOnsiteModal = () => { setOnsiteEntry(null); setOnsiteDate(""); };
+  const openOnsiteModal = (entry) => {
+    setOnsiteEntry(entry);
+    setOnsiteDate("");
+    setOnsiteRemark("");
+    setOnsiteCollected("");
+  };
+  const closeOnsiteModal = () => {
+    setOnsiteEntry(null);
+    setOnsiteDate("");
+    setOnsiteRemark("");
+    setOnsiteCollected("");
+  };
 
   const handleOnsiteSave = async (e) => {
     e.preventDefault();
@@ -593,7 +642,12 @@ export default function DueReminderPopup({ inlineMode = false }) {
       const res = await fetch(`/api/due-payments/${onsiteEntry._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isOnsiteReschedule: true, dueDate: onsiteDate }),
+        body: JSON.stringify({
+          isOnsiteReschedule: true,
+          dueDate: onsiteDate,
+          remark: onsiteRemark,
+          collectedAmount: onsiteCollected ? Number(onsiteCollected) : 0,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -609,6 +663,51 @@ export default function DueReminderPopup({ inlineMode = false }) {
       setSubmitting(false);
     }
   };
+
+  // ----- No Call -----
+  const openNoAnswerModal = (entry) => {
+    setNoAnswerEntry(entry);
+    setNoAnswerRemark("");
+  };
+  const closeNoAnswerModal = () => {
+    setNoAnswerEntry(null);
+    setNoAnswerRemark("");
+  };
+
+  const handleNoAnswerSave = async (e) => {
+    e.preventDefault();
+    if (!noAnswerEntry) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/due-payments/${noAnswerEntry._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isNoAnswer: true, remark: noAnswerRemark }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Marked as no call");
+        // Update in place — due date is unchanged so the entry stays put,
+        // just with a fresh rescheduleHistory (bumps the History count).
+        setEntries((prev) =>
+          prev.map((entry) =>
+            entry._id === noAnswerEntry._id ? { ...entry, ...data.data } : entry
+          )
+        );
+        closeNoAnswerModal();
+      } else {
+        showToast(data.message || "Failed to save", "error");
+      }
+    } catch {
+      showToast("Something went wrong while saving", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ----- History (count) toggle / detail popup -----
+  const openHistoryModal = (entry) => setHistoryEntry(entry);
+  const closeHistoryModal = () => setHistoryEntry(null);
 
   // Shared modals — used both in inline mode and popup mode.
   const modals = (
@@ -674,6 +773,13 @@ export default function DueReminderPopup({ inlineMode = false }) {
                 <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
               </div>
+             
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Call Remark — optional</label>
+                <textarea value={followUpRemark} onChange={(e) => setFollowUpRemark(e.target.value)} rows={2}
+                  placeholder="e.g. Asked for 3 more days, will pay partial next week"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </div>
               <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeFollowUpModal}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
@@ -706,6 +812,18 @@ export default function DueReminderPopup({ inlineMode = false }) {
                 <input type="date" value={onsiteDate} onChange={(e) => setOnsiteDate(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Amount Collected Now (₹) — optional</label>
+                <input type="number" min="0" value={onsiteCollected} onChange={(e) => setOnsiteCollected(e.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Visit Remark — optional</label>
+                <textarea value={onsiteRemark} onChange={(e) => setOnsiteRemark(e.target.value)} rows={2}
+                  placeholder="e.g. Met owner, shop closed, will pay by Friday"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </div>
               <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeOnsiteModal}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
@@ -717,6 +835,108 @@ export default function DueReminderPopup({ inlineMode = false }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* No Call Modal — logs a history entry only, never touches the due date */}
+      {noAnswerEntry && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
+          <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-xl">
+            <div className="flex justify-center pb-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-slate-200" />
+            </div>
+            <h3 className="mb-1 text-base font-semibold text-slate-800">Mark as No Call</h3>
+            <p className="mb-1 truncate text-sm text-slate-600">
+              {noAnswerEntry.customerName} &middot; ₹{Number(noAnswerEntry.amount).toLocaleString("en-IN")}
+            </p>
+            <p className="mb-4 text-xs text-slate-400">
+              This won&apos;t change the due date — it just logs the call attempt in history.
+            </p>
+            <form onSubmit={handleNoAnswerSave} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Remark — optional</label>
+                <textarea value={noAnswerRemark} onChange={(e) => setNoAnswerRemark(e.target.value)} rows={2}
+                  placeholder="e.g. Rang twice, no pickup"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={closeNoAnswerModal}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:w-auto sm:py-2">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submitting}
+                  className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 sm:w-auto sm:py-2">
+                  {submitting ? "Saving..." : "Mark No Call"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* History Detail Popup — shows every call / on-site / no-call entry */}
+      {historyEntry && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4"
+          onClick={closeHistoryModal}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between">
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-semibold text-slate-800">Call &amp; Visit History</h3>
+                <p className="text-xs text-slate-400">{historyEntry.customerName}</p>
+              </div>
+              <button
+                onClick={closeHistoryModal}
+                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(historyEntry.rescheduleHistory || []).length === 0 ? (
+                <p className="text-sm text-slate-400">No history yet.</p>
+              ) : (
+                historyEntry.rescheduleHistory.slice().reverse().map((r, i) => (
+                  <div key={i} className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-medium ${
+                          r.type === "call"
+                            ? "bg-sky-50 text-sky-700"
+                            : r.type === "onsite"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {r.type === "call" ? "📞 On Call" : r.type === "onsite" ? "🏠 On-site" : "📵 No Answer"}
+                      </span>
+                      <span className="text-slate-500">{formatDate(r.changedAt)}</span>
+                    </div>
+                    {r.type !== "no-call" && (
+                      <p className="mt-1.5 text-slate-500">
+                        {formatDate(r.previousDueDate)} → {formatDate(r.newDueDate)}
+                      </p>
+                    )}
+                    {(r.collectedAmount > 0 || r.remark) && (
+                      <div className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
+                        {r.collectedAmount > 0 && (
+                          <p className="font-semibold text-emerald-700">
+                            ₹{Number(r.collectedAmount).toLocaleString("en-IN")} collected
+                          </p>
+                        )}
+                        {r.remark && <p className="italic text-slate-500">{r.remark}</p>}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -764,6 +984,8 @@ export default function DueReminderPopup({ inlineMode = false }) {
                   onEdit={openEditModal}
                   onFollowUp={openFollowUpModal}
                   onOnsite={openOnsiteModal}
+                  onNoAnswer={openNoAnswerModal}
+                  onHistory={openHistoryModal}
                 />
               ))}
             </div>
@@ -882,6 +1104,8 @@ export default function DueReminderPopup({ inlineMode = false }) {
                     onEdit={openEditModal}
                     onFollowUp={openFollowUpModal}
                     onOnsite={openOnsiteModal}
+                    onNoAnswer={openNoAnswerModal}
+                    onHistory={openHistoryModal}
                   />
                 ))}
               </div>

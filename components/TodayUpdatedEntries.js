@@ -71,12 +71,14 @@ function getPendingActivity(entry) {
   const followUpTime = entry.lastFollowUpAt ? new Date(entry.lastFollowUpAt) : null;
   const editTime = entry.lastEditedAt ? new Date(entry.lastEditedAt) : null;
   const addedTime = entry.createdAt ? new Date(entry.createdAt) : null;
+  const noCallTime = entry.lastNoCallAt ? new Date(entry.lastNoCallAt) : null;
 
   // Pick the most recent activity
   const times = [
     followUpTime && { type: "follow-up", time: followUpTime },
     editTime && { type: "edited", time: editTime },
     addedTime && { type: "added", time: addedTime },
+    noCallTime && { type: "no-call", time: noCallTime },
   ].filter(Boolean);
 
   if (!times.length) return null;
@@ -88,6 +90,7 @@ const TYPE_META = {
   "edited":     { label: "✏️ Details edited",           bg: "bg-amber-50",   text: "text-amber-700"   },
   "follow-up":  { label: "📞 Follow-up rescheduled",    bg: "bg-violet-50",  text: "text-violet-700"  },
   "collected":  { label: "✅ Payment collected",         bg: "bg-emerald-50", text: "text-emerald-700" },
+  "no-call":    { label: "📵 No Answer",                   bg: "bg-red-50",     text: "text-red-700"     },
 };
 
 // Human-friendly labels for raw schema field names shown in the change log.
@@ -162,6 +165,16 @@ export default function TodayUpdatedEntries() {
               }));
           }
 
+          // For "no-call" activity, pull the remark logged alongside it.
+          let noCallRemark = "";
+          if (activity.type === "no-call" && Array.isArray(entry.rescheduleHistory)) {
+            const activityTime = activity.time.getTime();
+            const match = entry.rescheduleHistory.find(
+              (h) => h.type === "no-call" && new Date(h.changedAt).getTime() === activityTime
+            );
+            if (match) noCallRemark = match.remark || "";
+          }
+
           list.push({
             _id: entry._id + "_" + activity.type,
             entryId: entry._id,
@@ -175,6 +188,7 @@ export default function TodayUpdatedEntries() {
             dueDate: entry.dueDate,
             note: entry.note,
             changes,
+            noCallRemark,
           });
         }
       }
@@ -250,6 +264,7 @@ export default function TodayUpdatedEntries() {
           { value: "collected", label: "✅ Collected" },
           { value: "edited",    label: "✏️ Edited" },
           { value: "follow-up", label: "📞 Follow-up" },
+          { value: "no-call",   label: "📵 No Answer" },
           { value: "added",     label: "➕ New Added" },
         ].map((f) => (
           <button
@@ -397,6 +412,15 @@ export default function TodayUpdatedEntries() {
                       )}
                       {a.type === "added" && (
                         <span className="text-slate-500">Due: {formatDate(a.dueDate)}</span>
+                      )}
+                      {a.type === "no-call" && (
+                        <span className="text-slate-500">
+                          {a.noCallRemark ? (
+                            <span className="italic">{a.noCallRemark}</span>
+                          ) : (
+                            "Called — no answer"
+                          )}
+                        </span>
                       )}
                     </td>
 

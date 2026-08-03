@@ -932,19 +932,42 @@ export default function DuePaymentManager() {
                       </div>
                     </div>
 
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Reschedule History</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Call &amp; Visit History</p>
                     <div className="max-h-48 space-y-2 overflow-y-auto">
                       {(d.rescheduleHistory || []).length === 0 ? (
-                        <p className="text-sm text-slate-400">No reschedules yet.</p>
+                        <p className="text-sm text-slate-400">No history yet.</p>
                       ) : (
                         d.rescheduleHistory.slice().reverse().map((r, i) => (
-                          <div key={i} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">
-                            <span className={`rounded-full px-2 py-0.5 font-medium ${r.type === "call" ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-700"}`}>
-                              {r.type === "call" ? "📞 On Call" : "🏠 On-site"}
-                            </span>
-                            <span className="text-slate-500">
-                              {formatDate(r.previousDueDate)} → {formatDate(r.newDueDate)}
-                            </span>
+                          <div key={i} className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`rounded-full px-2 py-0.5 font-medium ${
+                                  r.type === "call"
+                                    ? "bg-sky-50 text-sky-700"
+                                    : r.type === "onsite"
+                                      ? "bg-amber-50 text-amber-700"
+                                      : "bg-red-50 text-red-700"
+                                }`}
+                              >
+                                {r.type === "call" ? "📞 On Call" : r.type === "onsite" ? "🏠 On-site" : "📵 No Answer"}
+                              </span>
+                              <span className="text-slate-500">{formatDate(r.changedAt)}</span>
+                            </div>
+                            {r.type !== "no-call" && (
+                              <p className="mt-1.5 text-slate-500">
+                                {formatDate(r.previousDueDate)} → {formatDate(r.newDueDate)}
+                              </p>
+                            )}
+                            {(r.collectedAmount > 0 || r.remark) && (
+                              <div className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
+                                {r.collectedAmount > 0 && (
+                                  <p className="font-semibold text-emerald-700">
+                                    ₹{Number(r.collectedAmount).toLocaleString("en-IN")} collected
+                                  </p>
+                                )}
+                                {r.remark && <p className="italic text-slate-500">{r.remark}</p>}
+                              </div>
+                            )}
                           </div>
                         ))
                       )}

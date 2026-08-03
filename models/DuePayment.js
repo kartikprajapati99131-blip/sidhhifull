@@ -23,12 +23,19 @@ const DuePaymentSchema = new mongoose.Schema(
     // --- No-Answer tracking (any dueDate change resets this) ---
     lastDueDateChangeAt: { type: Date, default: null },
 
+    // Timestamp of the most recent "No Call" log (call made, nobody picked
+    // up). Used by TodayUpdatedEntries to show it as an activity, since it
+    // deliberately does not touch dueDate/note/lastFollowUpAt.
+    lastNoCallAt: { type: Date, default: null },
+
     // --- Full reschedule trail (call vs onsite) for the detail popup ---
     rescheduleHistory: [
       {
-        type: { type: String, enum: ["call", "onsite"] },
+        type: { type: String, enum: ["call", "onsite", "no-call"] },
         previousDueDate: Date,
         newDueDate: Date,
+        remark: { type: String, default: "" },
+        collectedAmount: { type: Number, default: 0 },
         changedAt: { type: Date, default: Date.now },
       },
     ],

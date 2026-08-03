@@ -3,6 +3,11 @@ import DuePayment from "@/models/DuePayment";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 
+// Force this route to always execute fresh (no static caching) so
+// changes saved via PUT are reflected immediately on next fetch.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // GET /api/due-payments/[id]
 //
 // Returns the full record for a single entry (used by the "detail popup"
@@ -49,9 +54,12 @@ export async function GET(request, { params }) {
 //    body: { customerName, amount, dueDate, note, mobile, mobile2, referencedBy }
 //    -> updates fields + sets lastEditedAt to now (shows in "Recent Updates" for 4 days)
 //
-// 2. Follow-up reschedule (from the "Done Calling" popup):
-//    body: { isFollowUp: true, dueDate: "<new follow up date>" }
-//    -> stores current dueDate in previousDueDate, sets updatedDueDate + lastFollowUpAt
+// 2. Follow-up reschedule (from the "Done Calling" popup) / on-site reschedule:
+//    body: { isFollowUp: true, dueDate, remark?, collectedAmount? }
+//    body: { isOnsiteReschedule: true, dueDate, remark?, collectedAmount? }
+//    -> stores current dueDate in previousDueDate, sets updatedDueDate + lastFollowUpAt,
+//       logs remark/collectedAmount into rescheduleHistory, and adds collectedAmount
+//       onto the running amountGiven total ("Collected So Far").
 export async function PUT(request, { params }) {
   try {
     await dbConnect();
@@ -67,7 +75,7 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     const {
       customerName, amount, dueDate, note, mobile, mobile2, referencedBy,
-      isFollowUp, isOnsiteReschedule,
+      isFollowUp, isOnsiteReschedule, isNoAnswer, remark, collectedAmount,
     } = body;
 
     const existingEntry = await DuePayment.findById(id);
@@ -89,10 +97,14 @@ export async function PUT(request, { params }) {
       }
 
       const newDueDate = new Date(dueDate);
+      const collectedNow = Number(collectedAmount) || 0;
+
       existingEntry.rescheduleHistory.push({
         type: "call",
         previousDueDate: existingEntry.dueDate,
         newDueDate,
+        remark: remark ? String(remark).trim() : "",
+        collectedAmount: collectedNow,
       });
       existingEntry.previousDueDate = existingEntry.dueDate;
       existingEntry.updatedDueDate = newDueDate;
@@ -101,10 +113,42 @@ export async function PUT(request, { params }) {
       existingEntry.lastDueDateChangeAt = new Date();
       existingEntry.reminderShown = false;
 
+      // Running total collected so far (partial payments picked up during
+      // calls, before the account is fully completed).
+      if (collectedNow > 0) {
+        existingEntry.amountGiven = Number(existingEntry.amountGiven || 0) + collectedNow;
+      }
+
+      // Remark is logged in rescheduleHistory only (the History popup) —
+      // deliberately NOT appended to note anymore.
+
       await existingEntry.save();
 
       return NextResponse.json(
         { success: true, message: "Follow up date updated successfully", data: existingEntry },
+        { status: 200 }
+      );
+    }
+
+    // ── No Call (called, nobody picked up) ──
+    // Purely a history log entry — does NOT touch dueDate, previousDueDate,
+    // updatedDueDate, note, lastFollowUpAt, or anything else. The entry
+    // keeps showing up in Today's Reminders exactly as before. We do set
+    // lastNoCallAt so it can surface as an activity in Today's Updates.
+    if (isNoAnswer) {
+      existingEntry.rescheduleHistory.push({
+        type: "no-call",
+        previousDueDate: existingEntry.dueDate,
+        newDueDate: existingEntry.dueDate,
+        remark: remark ? String(remark).trim() : "",
+        collectedAmount: 0,
+      });
+      existingEntry.lastNoCallAt = new Date();
+
+      await existingEntry.save();
+
+      return NextResponse.json(
+        { success: true, message: "Marked as no call", data: existingEntry },
         { status: 200 }
       );
     }
@@ -119,10 +163,14 @@ export async function PUT(request, { params }) {
       }
 
       const newDueDate = new Date(dueDate);
+      const collectedNow = Number(collectedAmount) || 0;
+
       existingEntry.rescheduleHistory.push({
         type: "onsite",
         previousDueDate: existingEntry.dueDate,
         newDueDate,
+        remark: remark ? String(remark).trim() : "",
+        collectedAmount: collectedNow,
       });
       existingEntry.previousDueDate = existingEntry.dueDate;
       existingEntry.updatedDueDate = newDueDate;
@@ -130,6 +178,16 @@ export async function PUT(request, { params }) {
       existingEntry.lastDueDateChangeAt = new Date();
       existingEntry.lastEditedAt = new Date(); // so it shows in Today's Updates
       existingEntry.reminderShown = false;
+
+      if (collectedNow > 0) {
+        existingEntry.amountGiven = Number(existingEntry.amountGiven || 0) + collectedNow;
+      }
+
+      if (remark && remark.trim()) {
+        const stamp = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+        const line = `[${stamp} on-site] ${remark.trim()}`;
+        existingEntry.note = existingEntry.note ? `${existingEntry.note}\n${line}` : line;
+      }
 
       await existingEntry.save();
 
