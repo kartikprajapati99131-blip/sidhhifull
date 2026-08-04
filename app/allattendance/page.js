@@ -214,6 +214,12 @@ export default function AdminAttendance() {
           >
             💰 Salary Details
           </button>
+          <button
+            onClick={() => router.push("/compensation")}
+            className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-full hover:bg-gray-800"
+          >
+           Add Hours
+          </button>
           <span className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full">
             ✓ Live
           </span>

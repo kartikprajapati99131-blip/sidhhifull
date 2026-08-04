@@ -28,16 +28,27 @@ export async function GET(req) {
   doc.fontSize(10).font("Helvetica").fillColor("#555").text(`Period: ${from} to ${to}`, { align: "center" });
   doc.moveDown(1);
 
-  const colX = { name: 40, hours: 200, hourly: 280, base: 370, adj: 470, total: 580 };
+  const colX = {
+    name: 40,
+    hours: 175,
+    comp: 230,
+    eff: 290,
+    hourly: 355,
+    base: 415,
+    adj: 490,
+    total: 565,
+  };
 
   const drawHeader = (y) => {
     doc.fontSize(9).font("Helvetica-Bold").fillColor("#000");
     doc.text("Employee Name", colX.name, y);
-    doc.text("Hours", colX.hours, y);
-    doc.text("Rate/Hr", colX.hourly, y);
-    doc.text("Base Salary", colX.base, y);
-    doc.text("Adj. (+/-)", colX.adj, y);
-    doc.text("Total Income", colX.total, y);
+    doc.text("Worked Hrs", colX.hours, y, { width: 50 });
+    doc.text("Comp. Hrs", colX.comp, y, { width: 55 });
+    doc.text("Total Eff. Hrs", colX.eff, y, { width: 60 });
+    doc.text("Rate/Hr", colX.hourly, y, { width: 55 });
+    doc.text("Base Salary", colX.base, y, { width: 70 });
+    doc.text("Adj. (+/-)", colX.adj, y, { width: 70 });
+    doc.text("Total Income", colX.total, y, { width: 90 });
     doc.moveTo(40, y + 15).lineTo(760, y + 15).strokeColor("#ccc").stroke();
   };
 
@@ -55,10 +66,12 @@ export async function GET(req) {
       y += 25;
     }
     doc.text(emp.name, colX.name, y, { width: 150 });
-    doc.text(emp.totalHours.toFixed(1), colX.hours, y, { width: 70 });
-    doc.text(emp.hourlyRate.toFixed(2), colX.hourly, y, { width: 80 });
-    doc.text(emp.baseIncome.toFixed(2), colX.base, y, { width: 90 });
-    doc.text(`${emp.adjustments >= 0 ? "+" : ""}${emp.adjustments.toFixed(2)}`, colX.adj, y, { width: 100 });
+    doc.text(emp.totalHours.toFixed(1), colX.hours, y, { width: 50 });
+    doc.text(emp.compensationHours.toFixed(1), colX.comp, y, { width: 55 });
+    doc.text(emp.totalEffectiveHours.toFixed(1), colX.eff, y, { width: 60 });
+    doc.text(emp.hourlyRate.toFixed(2), colX.hourly, y, { width: 55 });
+    doc.text(emp.baseIncome.toFixed(2), colX.base, y, { width: 70 });
+    doc.text(`${emp.adjustments >= 0 ? "+" : ""}${emp.adjustments.toFixed(2)}`, colX.adj, y, { width: 70 });
     doc.text(emp.totalIncome.toFixed(2), colX.total, y, { width: 90 });
     y += 20;
 

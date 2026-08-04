@@ -134,7 +134,12 @@ export default function SalaryOverview() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{emp.name}</p>
-                    <p className="text-xs text-gray-400">{emp.totalHours.toFixed(1)} hrs · Rs. {emp.hourlyRate.toFixed(2)}/hr</p>
+                    <p className="text-xs text-gray-400">
+                      {emp.totalHours.toFixed(1)} hrs · Rs. {emp.hourlyRate.toFixed(2)}/hr
+                      {emp.compensationHours > 0 && (
+                        <span className="text-emerald-600"> (+{emp.compensationHours.toFixed(1)} comp)</span>
+                      )}
+                    </p>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-semibold text-gray-900">Rs. {emp.totalIncome.toFixed(2)}</p>

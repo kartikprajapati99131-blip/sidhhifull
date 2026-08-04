@@ -277,11 +277,19 @@ export default function EmployeeSalaryPage() {
         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mb-4">
           <p className="text-sm font-semibold text-gray-900 mb-3">Income summary</p>
           <div className="grid grid-cols-2 gap-3 text-sm mb-2">
-            <div><p className="text-xs text-gray-400">Total hours</p><p className="text-gray-800">{summary.totalHours.toFixed(1)} hrs</p></div>
+            <div><p className="text-xs text-gray-400">Worked hours</p><p className="text-gray-800">{summary.totalHours.toFixed(1)} hrs</p></div>
             <div><p className="text-xs text-gray-400">Base income</p><p className="text-gray-800">Rs. {summary.baseIncome.toFixed(2)}</p></div>
             <div><p className="text-xs text-gray-400">Added</p><p className="text-emerald-600">+Rs. {summary.credit.toFixed(2)}</p></div>
             <div><p className="text-xs text-gray-400">Deducted</p><p className="text-rose-500">-Rs. {summary.debit.toFixed(2)}</p></div>
           </div>
+
+          {summary.compensationHours > 0 && (
+            <div className="grid grid-cols-2 gap-3 text-sm mb-2 pt-2 border-t border-gray-50">
+              <div><p className="text-xs text-gray-400">Compensation hours</p><p className="text-emerald-700 font-medium">{summary.compensationHours.toFixed(1)} hrs</p></div>
+              <div><p className="text-xs text-gray-400">Total effective hours</p><p className="text-gray-800 font-medium">{summary.totalEffectiveHours.toFixed(1)} hrs</p></div>
+            </div>
+          )}
+
           <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-900">Total income</span>
             <span className="text-xl font-black text-gray-900">Rs. {summary.totalIncome.toFixed(2)}</span>
