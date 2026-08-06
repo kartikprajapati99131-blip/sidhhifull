@@ -9,12 +9,25 @@ import dbConnect from "@/db/connectDb";
 import Entry from "@/models/Entry";
 import { serializeEntry } from "@/lib/serializeEntry";
 
-// Roles allowed to see every entry, not just their own — keep this in sync
-// with app/entries/followup/page.js and the [id] routes below.
-export const CAN_SEE_ALL_ROLES = ["admin", "sales","subadmin"];
+// Roles allowed to see every CUSTOMER entry, not just their own — keep
+// this in sync with app/entries/followup/page.js and the [id] routes.
+export const CAN_SEE_ALL_ROLES = ["admin", "sales", "subadmin"];
+
+// Roles allowed to see every MISTRY entry (added by anyone). Sales is
+// deliberately excluded: sales sees all customers, but only the Mistry
+// entries they personally created.
+export const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
+
+// Roles allowed to delete entries — separate from CAN_SEE_ALL_ROLES on
+// purpose. Sales can view/add/edit but must NEVER be able to delete,
+// even via a direct API call.
+export const CAN_DELETE_ROLES = ["admin", "subadmin"];
 
 // GET /api/entries
-// admin & sales -> every entry. Everyone else -> only entries they created.
+// admin & subadmin -> every entry, of both types.
+// sales             -> every customer entry, but ONLY the mistry entries
+//                       they created themselves.
+// everyone else     -> only entries they created (either type).
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -24,8 +37,26 @@ export async function GET() {
 
     await dbConnect();
 
-    const canSeeAll = CAN_SEE_ALL_ROLES.includes(session.user.role);
-    const filter = canSeeAll ? {} : { "createdBy.id": session.user.id };
+    const role = session.user.role;
+    const seesAllMistry = CAN_SEE_ALL_MISTRY_ROLES.includes(role);
+    const seesAllCustomers = CAN_SEE_ALL_ROLES.includes(role);
+
+    let filter;
+    if (seesAllMistry) {
+      // admin / subadmin: no restrictions at all.
+      filter = {};
+    } else if (seesAllCustomers) {
+      // sales: all customers, but mistry entries only if they created them.
+      filter = {
+        $or: [
+          { type: "customer" },
+          { type: "mistry", "createdBy.id": session.user.id },
+        ],
+      };
+    } else {
+      // any other role: only their own entries, regardless of type.
+      filter = { "createdBy.id": session.user.id };
+    }
 
     const docs = await Entry.find(filter).sort({ createdAt: -1 });
 

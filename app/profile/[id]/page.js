@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 
 const ROLE_STYLES = {
     admin: "bg-violet-100 text-violet-700",
     user: "bg-sky-100 text-sky-700",
     staff: "bg-emerald-100 text-emerald-700",
+    collection: "bg-cyan-100 text-cyan-700",
     mistry: "bg-amber-100 text-amber-700",
     architect: "bg-rose-100 text-rose-700",
 };
@@ -34,23 +36,31 @@ function StarDisplay({ rating }) {
     );
 }
 
+function formatCurrency(amount = 0) {
+    return `₹${Math.round(Number(amount) || 0).toLocaleString("en-IN")}`;
+}
+
 export default function ProfilePage() {
-    const { id } = useParams(); // ✅ Next.js guarantees this is available in app router
+    const { id } = useParams();
+    const { data: session } = useSession();
 
     const [user, setUser] = useState(null);
     const [attendance, setAttendance] = useState([]);
     const [reviews, setReviews] = useState([]);
-    const [loading, setLoading] = useState(true); // ✅ start true, always resolves
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
+    // ── salary state (merged in, single fetch, single component) ──
+    const [salary, setSalary] = useState(null);
+    const [salaryLoading, setSalaryLoading] = useState(true);
+    const [salaryError, setSalaryError] = useState("");
+
     useEffect(() => {
-        // ✅ no early return — always call setLoading(false) no matter what
         const fetchAll = async () => {
             try {
-                if (!id) return; // 🔥 use params id instead
+                if (!id) return;
 
                 const res = await fetch(`/api/user/${id}`);
-
                 const data = await res.json();
 
                 if (!res.ok) {
@@ -60,7 +70,6 @@ export default function ProfilePage() {
 
                 setUser(data?.user || data);
 
-                // ✅ attendance — silent fail
                 try {
                     const attRes = await fetch(`/api/attendance/get?userId=${id}`);
                     if (attRes.ok) {
@@ -69,7 +78,6 @@ export default function ProfilePage() {
                     }
                 } catch { }
 
-                // ✅ reviews — silent fail
                 try {
                     const revRes = await fetch(`/api/review/get?staffId=${id}`);
                     if (revRes.ok) {
@@ -87,7 +95,34 @@ export default function ProfilePage() {
         };
 
         fetchAll();
-    }, [id]); // ✅ id from app router is always a string, never undefined
+    }, [id]);
+
+    // ── salary fetch — admin can view anyone, staff/collection only their own ──
+    const role = session?.user?.role;
+    const isOwnProfile = session?.user?.id === id;
+    const canViewSalary = role === "admin" || (["staff", "collection"].includes(role) && isOwnProfile);
+
+    useEffect(() => {
+        if (!id || !canViewSalary) {
+            setSalaryLoading(false);
+            return;
+        }
+
+        setSalaryLoading(true);
+        setSalaryError("");
+
+        fetch(`/api/salary/summary?userId=${id}`)
+            .then((res) => {
+                if (!res.ok) throw new Error(`Failed (${res.status})`);
+                return res.json();
+            })
+            .then((res) => {
+                const record = Array.isArray(res.data) ? res.data[0] : null;
+                setSalary(record || null);
+            })
+            .catch(() => setSalaryError("Failed to load salary."))
+            .finally(() => setSalaryLoading(false));
+    }, [id, canViewSalary]);
 
     if (loading) {
         return (
@@ -112,10 +147,9 @@ export default function ProfilePage() {
         );
     }
 
-    const isWorker = ["staff","admin"].includes(user.role);
+    const isWorker = ["staff", "collection", "admin"].includes(user.role);
     const isAdmin = ["admin"].includes(user.role);
 
-    // ✅ current month only
     const now = new Date();
     const currentMonthAttendance = attendance.filter((r) => {
         if (!r.date) return false;
@@ -137,6 +171,16 @@ export default function ProfilePage() {
         });
     };
 
+    const {
+        baseIncome = 0,
+        credit = 0,
+        debit = 0,
+        totalIncome = 0,
+        compensationHours = 0,
+        totalEffectiveHours = 0,
+        transactions = [],
+    } = salary || {};
+
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -152,7 +196,6 @@ export default function ProfilePage() {
                         ← Back
                     </Link>
                 )}
-                
 
                 {/* PROFILE HEADER */}
                 <div className="bg-white border border-gray-100 rounded-3xl shadow-sm p-6 mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-5">
@@ -189,6 +232,111 @@ export default function ProfilePage() {
                             <StatCard label="Avg Rating" value={avgRating ? avgRating.toFixed(1) : "—"} sub={`${reviews.length} reviews`} />
                             <StatCard label="Points" value={user.points || 0} sub="earned" />
                         </div>
+
+                        {/* SALARY — merged directly, no separate component */}
+                        {canViewSalary && (
+                            <div className="mb-6">
+                                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">
+                                    Salary (This Month)
+                                </h2>
+
+                                {salaryLoading && (
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm animate-pulse">
+                                        <div className="h-4 w-24 bg-gray-100 rounded mb-3" />
+                                        <div className="h-8 w-32 bg-gray-100 rounded" />
+                                    </div>
+                                )}
+
+                                {!salaryLoading && (salaryError || !salary) && (
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm text-center text-gray-400">
+                                        <p className="text-sm">{salaryError || "No salary record found."}</p>
+                                    </div>
+                                )}
+
+                                {!salaryLoading && salary && (
+                                    <>
+                                        {/* QUICK STAT */}
+                                        <div className="mb-3 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider font-medium">
+                                                    Total Payable
+                                                </p>
+                                                <p className="text-3xl font-black text-gray-900 mt-0.5">
+                                                    {formatCurrency(totalIncome)}
+                                                </p>
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {totalEffectiveHours.toFixed(1)} hrs
+                                                    {compensationHours > 0 && (
+                                                        <span className="text-emerald-600"> (incl. {compensationHours.toFixed(1)}h comp)</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-xl">
+                                                💰
+                                            </div>
+                                        </div>
+
+                                        {/* BREAKDOWN */}
+                                        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                            <div className="flex items-center justify-between text-sm">
+                                                <span className="text-gray-500">Base Income</span>
+                                                <span className="font-semibold text-gray-900">{formatCurrency(baseIncome)}</span>
+                                            </div>
+                                            {credit > 0 && (
+                                                <div className="flex items-center justify-between text-sm mt-1.5">
+                                                    <span className="text-gray-500">Additions</span>
+                                                    <span className="font-semibold text-emerald-700">
+                                                        +{formatCurrency(credit)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {debit > 0 && (
+                                                <div className="flex items-center justify-between text-sm mt-1.5">
+                                                    <span className="text-gray-500">Deductions</span>
+                                                    <span className="font-semibold text-rose-600">
+                                                        -{formatCurrency(debit)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-50">
+                                                <span className="text-gray-700 font-medium">Net Payable</span>
+                                                <span className="font-bold text-gray-900">{formatCurrency(totalIncome)}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* TRANSACTIONS */}
+                                        {transactions.length > 0 && (
+                                            <div className="mt-3 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden divide-y divide-gray-50">
+                                                {transactions.map((t) => (
+                                                    <div key={t._id} className="px-5 py-3 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span
+                                                                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                                                    t.type === "credit" ? "bg-emerald-400" : "bg-rose-400"
+                                                                }`}
+                                                            />
+                                                            <div>
+                                                                <p className="text-sm text-gray-700 font-medium">
+                                                                    {t.reason || (t.type === "credit" ? "Addition" : "Deduction")}
+                                                                </p>
+                                                                <p className="text-xs text-gray-400">{formatDate(t.date)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <span
+                                                            className={`text-sm font-black ${
+                                                                t.type === "credit" ? "text-emerald-600" : "text-rose-500"
+                                                            }`}
+                                                        >
+                                                            {t.type === "credit" ? "+" : "-"}{formatCurrency(t.amount)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
 
                         {/* REVIEWS */}
                         {reviews.length > 0 && (

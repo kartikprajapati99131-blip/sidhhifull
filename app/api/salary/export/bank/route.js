@@ -1,11 +1,18 @@
 import connectDb from "@/db/connectDb";
 import { requireAdmin } from "@/lib/auth";
 import { computeSalarySummary } from "@/lib/salaryCalc";
-import PDFDocument from "pdfkit";
+import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
 
 const COMPANY_NAME = "SIDDHI GLASS & PLYWOOD CENTER";
+
+// Same month-name helper used implicitly by your uploaded sheet's title
+// (e.g. "July Salary Statement")
+function monthLabel(fromStr) {
+  const d = new Date(fromStr);
+  return d.toLocaleString("en-US", { month: "long" });
+}
 
 export async function GET(req) {
   await connectDb();
@@ -20,78 +27,119 @@ export async function GET(req) {
 
   const summary = await computeSalarySummary({ from, to });
 
-  const doc = new PDFDocument({ margin: 40, size: "A4" });
-  const chunks = [];
-  doc.on("data", (chunk) => chunks.push(chunk));
-  const done = new Promise((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Table 2");
 
-  doc.fontSize(18).font("Helvetica-Bold").fillColor("#000").text(COMPANY_NAME, { align: "center" });
-  doc.moveDown(0.2);
-  doc.fontSize(16).font("Helvetica-Bold").text("Bank Salary Statement", { align: "center" });
-  doc.moveDown(0.3);
-  doc.fontSize(10).font("Helvetica").fillColor("#555").text(`Period: ${from} to ${to}`, { align: "center" });
-  doc.moveDown(1);
+  ws.columns = [
+    { key: "bankName", width: 37.33 },
+    { key: "accountNumber", width: 29.66 },
+    { key: "ifscCode", width: 26.83 },
+    { key: "amount", width: 19 },
+  ];
 
-  const colX = { name: 40, acc: 200, ifsc: 350, amount: 470 };
+  const mediumBorder = { style: "medium" };
+  const thinBorder = { style: "thin" };
 
-  const drawHeader = (y) => {
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#000");
-    doc.text("Bank Name", colX.name, y);
-    doc.text("Account No.", colX.acc, y);
-    doc.text("IFSC Code", colX.ifsc, y);
-    doc.text("Amount (Rs.)", colX.amount, y);
-    doc.moveTo(40, y + 15).lineTo(555, y + 15).strokeColor("#ccc").stroke();
-  };
+  // Title row (merged, wrapped, same as uploaded template)
+  ws.mergeCells("A1:D1");
+  const titleCell = ws.getCell("A1");
+  titleCell.value = `${COMPANY_NAME}                                                                 ${monthLabel(
+    from
+  )} Salary Statement\nPeriod: ${from} to ${to}`;
+  titleCell.font = { name: "Times New Roman", size: 18, bold: false };
+  titleCell.alignment = { horizontal: "center", vertical: "top", wrapText: true };
+  titleCell.border = { top: mediumBorder, left: mediumBorder, right: mediumBorder };
+  ws.getRow(1).height = 71.25;
 
-  let y = doc.y;
-  drawHeader(y);
-  y += 25;
+  // Header row
+  const headerRow = ws.getRow(2);
+  headerRow.values = ["Bank Name", "Account No.", "IFSC Code", "Amount (Rs.)"];
+  headerRow.height = 16.7;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: "Arial", size: 10, bold: true };
+    cell.alignment = { horizontal: "left", vertical: "top", wrapText: true };
+    cell.border = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+  });
+  headerRow.getCell(4).border = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: mediumBorder };
 
-  let grandTotal = 0;
-  doc.font("Helvetica").fontSize(10).fillColor("#222");
-
+  // Data rows
+  let rowIdx = 3;
   summary.forEach((emp) => {
-    if (y > 750) {
-      doc.addPage();
-      y = 40;
-      drawHeader(y);
-      y += 25;
-    }
-    doc.text(emp.bankName || emp.name, colX.name, y, { width: 150 });
-    doc.text(emp.accountNumber || "-", colX.acc, y, { width: 140 });
-    doc.text(emp.ifscCode || "-", colX.ifsc, y, { width: 110 });
-    doc.text(emp.totalIncome.toFixed(2), colX.amount, y, { width: 80 });
-    grandTotal += emp.totalIncome;
-    y += 20;
+    const row = ws.getRow(rowIdx);
+    row.getCell(1).value = emp.bankName || emp.name;
+    row.getCell(2).value = emp.accountNumber ? Number(emp.accountNumber) : "-";
+    row.getCell(3).value = emp.ifscCode || "-";
+    row.getCell(4).value = emp.totalIncome;
+
+    row.getCell(1).font = { name: "Arial MT", size: 10, bold: false };
+    row.getCell(1).alignment = { horizontal: "left", vertical: "top", wrapText: true };
+
+    row.getCell(2).font = { name: "Arial MT", size: 12, bold: true };
+    row.getCell(2).numFmt = "0";
+    row.getCell(2).alignment = { horizontal: "left", vertical: "top" };
+
+    row.getCell(3).font = { name: "Arial MT", size: 10, bold: false };
+    row.getCell(3).alignment = { horizontal: "left", vertical: "top", wrapText: true };
+
+    row.getCell(4).font = { name: "Arial MT", size: 12, bold: true };
+    row.getCell(4).numFmt = "0.00";
+    row.getCell(4).alignment = { horizontal: "right", vertical: "top" };
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.border = {
+        top: thinBorder,
+        bottom: thinBorder,
+        left: thinBorder,
+        right: colNumber === 4 ? mediumBorder : thinBorder,
+      };
+    });
+
+    row.height = 20.1;
+    rowIdx += 1;
   });
 
-  doc.moveTo(40, y + 5).lineTo(555, y + 5).strokeColor("#ccc").stroke();
-  doc.font("Helvetica-Bold").text(`Total: Rs. ${grandTotal.toFixed(2)}`, colX.amount, y + 12);
+  const lastDataRow = rowIdx - 1;
 
-  // Authorised Signature & Stamp block at the bottom
-  const sigBlockHeight = 100;
-  if (y + 12 + sigBlockHeight > 780) {
-    doc.addPage();
-    y = 40;
-  } else {
-    y += 12;
-  }
+  // Total row
+  const totalRow = ws.getRow(rowIdx);
+  totalRow.getCell(3).value = "TOTAL";
+  totalRow.getCell(3).font = { name: "Times New Roman", size: 12, bold: false };
+  totalRow.getCell(3).alignment = { horizontal: "center", wrapText: true };
 
-  const sigY = 780 - sigBlockHeight > y + 40 ? 780 - sigBlockHeight : y + 40;
+  totalRow.getCell(4).value = { formula: `SUM(D3:D${lastDataRow})` };
+  totalRow.getCell(4).font = { name: "Arial", size: 12, bold: true };
+  totalRow.getCell(4).numFmt = "0.00";
+  totalRow.getCell(4).alignment = { horizontal: "right", wrapText: true };
+  totalRow.getCell(4).border = { right: mediumBorder };
+  totalRow.height = 28.35;
+  rowIdx += 1;
 
-  doc.moveTo(40, sigY).lineTo(200, sigY).strokeColor("#999").stroke();
-  doc.fontSize(10).font("Helvetica").fillColor("#333").text("Authorised Signature", 40, sigY + 5);
+  // Spacer row (matches uploaded template's row 16)
+  ws.getRow(rowIdx).height = 13.5;
+  rowIdx += 2; // leaves a blank row like the template's row 17
 
-  doc.moveTo(395, sigY).lineTo(555, sigY).strokeColor("#999").stroke();
-  doc.fontSize(10).font("Helvetica").fillColor("#333").text("Company Stamp", 395, sigY + 5);
+  // Authorised Signature & Company Stamp row (merged like the template's A18:D18)
+  ws.mergeCells(`A${rowIdx}:B${rowIdx}`);
+  const sigCell = ws.getCell(`A${rowIdx}`);
+  sigCell.value = "Authorised Signature";
+  sigCell.font = { name: "Arial", size: 10 };
+  sigCell.alignment = { horizontal: "left", vertical: "top" };
+  sigCell.border = { top: thinBorder };
 
-  doc.end();
-  const pdfBuffer = await done;
+  ws.mergeCells(`C${rowIdx}:D${rowIdx}`);
+  const stampCell = ws.getCell(`C${rowIdx}`);
+  stampCell.value = "Company Stamp";
+  stampCell.font = { name: "Arial", size: 10 };
+  stampCell.alignment = { horizontal: "right", vertical: "top" };
+  stampCell.border = { top: thinBorder };
+  ws.getRow(rowIdx).height = 16.5;
 
-  return new Response(pdfBuffer, {
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  return new Response(buffer, {
     headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="bank-salary-${from}-to-${to}.pdf"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="bank-salary-${from}-to-${to}.xlsx"`,
     },
   });
 }

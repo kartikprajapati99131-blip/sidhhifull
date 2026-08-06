@@ -7,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ⚠️ adju
 import dbConnect from "@/db/connectDb";
 import Entry from "@/models/Entry";
 import { serializeEntry } from "@/lib/serializeEntry";
-import { CAN_SEE_ALL_ROLES } from "../route";
+import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES, CAN_DELETE_ROLES } from "../route";
 
 const EDITABLE_FIELDS = [
   "mobile1",
@@ -40,10 +40,17 @@ const FIELD_LABELS = {
   nextMeetingDate: "Next meeting date",
 };
 
-// A staff member may only read/edit entries they created themselves.
-// admin & sales can touch anything.
+// Read/edit access for a single entry:
+// - admin/subadmin: anything.
+// - sales: any customer entry, but only mistry entries they created.
+// - everyone else: only entries they created, either type.
 function canAccess(session, entry) {
-  if (CAN_SEE_ALL_ROLES.includes(session.user.role)) return true;
+  const role = session.user.role;
+  if (CAN_SEE_ALL_MISTRY_ROLES.includes(role)) return true;
+  if (CAN_SEE_ALL_ROLES.includes(role)) {
+    if (entry.type === "customer") return true;
+    return entry.createdBy?.id === session.user.id;
+  }
   return entry.createdBy?.id === session.user.id;
 }
 
@@ -157,15 +164,18 @@ export async function PUT(request, { params }) {
 }
 
 // DELETE /api/entries/[id]
-// Only admin/subadmin can delete — staff can edit their own mistakes but
-// not remove records outright.
+// Only admin/subadmin can delete — staff (including sales) can edit their
+// own mistakes but not remove records outright. NOTE: this now checks
+// CAN_DELETE_ROLES, not CAN_SEE_ALL_ROLES — under the old code sales was
+// in CAN_SEE_ALL_ROLES and could delete ANY entry via a direct API call,
+// even though the delete button was hidden from them in the UI.
 export async function DELETE(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
-    if (!CAN_SEE_ALL_ROLES.includes(session.user.role)) {
+    if (!CAN_DELETE_ROLES.includes(session.user.role)) {
       return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
     }
 

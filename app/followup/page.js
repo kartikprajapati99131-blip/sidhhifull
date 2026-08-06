@@ -3,8 +3,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 
-// Roles that can see EVERY entry (not just their own).
+// Roles that can see EVERY customer entry (not just their own).
 const CAN_SEE_ALL_ROLES = ["admin", "subadmin", "sales"];
+
+// Roles that can see EVERY mistry entry, added by anyone. Sales is
+// deliberately excluded: sales can see all customers, but only the Mistry
+// entries they personally created — same rule enforced server-side in
+// app/api/entries/route.js (CAN_SEE_ALL_MISTRY_ROLES).
+const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
 
 // Roles that can delete an entry. Sales can view/add/edit but NOT delete.
 const CAN_DELETE_ROLES = ["admin", "subadmin"];
@@ -880,16 +886,22 @@ export default function EntryManager() {
     role: session?.user?.role || "staff",
   };
   const canSeeAll = CAN_SEE_ALL_ROLES.includes(currentUser.role);
+  // canSeeAllMistry = allowed to see Mistry entries added by other staff.
+  // Everyone else (sales included) sees ALL customers via canSeeAll, but
+  // Mistry entries are additionally restricted to "only what I added" —
+  // enforced both here (defense in depth) and, authoritatively, on the
+  // server in app/api/entries/route.js.
+  const canSeeAllMistry = CAN_SEE_ALL_MISTRY_ROLES.includes(currentUser.role);
   // canDelete is separate from canSeeAll: sales can view all entries but
   // must NOT be able to delete them — only admin and subadmin can.
   const canDelete = CAN_DELETE_ROLES.includes(currentUser.role);
   // canSeeDue = allowed to open "Due & overdue" (today + up to
   // NOT_VISITED_AFTER_DAYS days overdue). Sales IS included.
   const canSeeDue = DUE_VIEW_ROLES.includes(currentUser.role);
-  // canSeeStats = allowed to see "Not Visited", "Today's Updates", and the
-  // date-range filter. Sales is deliberately excluded here even though
-  // sales can see all entries (canSeeAll) and can open Due & overdue
-  // (canSeeDue) above.
+  // canSeeStats = allowed to see "Not Visited", "Today's Updates", the
+  // date-range filter, AND the "Added by" dropdown filter. Sales is
+  // deliberately excluded here even though sales can see all customers
+  // (canSeeAll) and can open Due & overdue (canSeeDue) above.
   const canSeeStats = ADMIN_SUBADMIN_ROLES.includes(currentUser.role);
   const canSeeSuccessRatio = SUCCESS_RATIO_ROLES.includes(currentUser.role);
 
@@ -920,6 +932,10 @@ export default function EntryManager() {
   const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared by list, Today's Updates, Due & overdue
   const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere, same as typeFilter
   const [referralFilter, setReferralFilter] = useState("all"); // "all" | "mistry" | "architect" — customer-only, main list
+  // "Added by" — admin/subadmin only. Shortlists EITHER customer or mistry
+  // entries down to a single staff member's additions. Shared through
+  // baseFilteredEntries so it also narrows Due & overdue / Today's Updates.
+  const [addedByFilter, setAddedByFilter] = useState("all"); // "all" | createdBy.id
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -970,22 +986,42 @@ export default function EntryManager() {
   }, [view, canSeeDue, canSeeStats]);
 
   // Base pipeline shared by the main list, the Due & overdue screen, and
-  // (indirectly, via its own props) Today's Updates: entry type + visit
-  // tag. Everything else (status, referral, search, date range) only
-  // applies to the main "Entries" list further down.
+  // (indirectly, via its own props) Today's Updates: entry type, visit
+  // tag, Mistry-ownership restriction, and the admin/subadmin "Added by"
+  // shortlist. Everything else (status, referral, search, date range)
+  // only applies to the main "Entries" list further down.
   const baseFilteredEntries = useMemo(
     () =>
       entries.filter((e) => {
         if (typeFilter !== "all" && e.type !== typeFilter) return false;
         if (tagFilter !== "all" && !getEntryTags(e).includes(tagFilter)) return false;
+        // Mistry entries: only admin/subadmin can see everyone's. Everyone
+        // else (sales) only ever sees the Mistry entries they added
+        // themselves — customers are unaffected by this check.
+        if (e.type === "mistry" && !canSeeAllMistry && e.createdBy?.id !== currentUser.id) return false;
+        // Admin/subadmin-only shortlist by whoever added the entry —
+        // works for both Customer and Mistry lists.
+        if (addedByFilter !== "all" && e.createdBy?.id !== addedByFilter) return false;
         return true;
       }),
-    [entries, typeFilter, tagFilter]
+    [entries, typeFilter, tagFilter, canSeeAllMistry, currentUser.id, addedByFilter]
   );
 
   const dueEntries = useMemo(() => baseFilteredEntries.filter(isDueOrOverdue), [baseFilteredEntries]);
   const notVisitedEntries = useMemo(() => baseFilteredEntries.filter(isNotVisited), [baseFilteredEntries]);
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
+
+  // "Added by" dropdown options — admin/subadmin only, built from whoever
+  // has actually added something, so the list never shows stale/empty
+  // names. Works for both entry types since it's just createdBy.
+  const addedByOptions = useMemo(() => {
+    if (!canSeeStats) return [];
+    const map = new Map();
+    for (const e of entries) {
+      if (e.createdBy?.id) map.set(e.createdBy.id, e.createdBy.name);
+    }
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [entries, canSeeStats]);
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1021,12 +1057,22 @@ export default function EntryManager() {
   }, [baseFilteredEntries, search, statusFilter, referralFilter, fromDate, toDate, canSeeStats]);
 
   const hasDateFilter = canSeeStats && !!(fromDate || toDate);
+  const hasActiveFilters =
+    search ||
+    statusFilter !== "all" ||
+    typeFilter !== "all" ||
+    tagFilter !== "all" ||
+    referralFilter !== "all" ||
+    addedByFilter !== "all" ||
+    hasDateFilter;
+
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
     setTypeFilter("all");
     setTagFilter("all");
     setReferralFilter("all");
+    setAddedByFilter("all");
     setFromDate("");
     setToDate("");
   };
@@ -1470,7 +1516,12 @@ export default function EntryManager() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-slate-500">
           Signed in as <span className="font-medium text-slate-700">{currentUser.name}</span> ·{" "}
-          <span className="capitalize">{currentUser.role}</span> · {canSeeAll ? "viewing all entries" : "viewing your entries only"}
+          <span className="capitalize">{currentUser.role}</span> ·{" "}
+          {canSeeAllMistry
+            ? "viewing all entries"
+            : canSeeAll
+            ? "viewing all customers · your Mistry entries only"
+            : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {/* Today's Updates: admin + subadmin only. Sales will never see
@@ -1569,7 +1620,7 @@ export default function EntryManager() {
           <label className="text-xs font-medium text-slate-600">Tag</label>
           <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
         </div>
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
             <div className="relative">
@@ -1610,6 +1661,23 @@ export default function EntryManager() {
               ))}
             </select>
           </div>
+          {/* Admin/subadmin only: shortlist by whoever added the entry —
+              works across both Customer and Mistry lists. */}
+          {canSeeStats && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Added by</label>
+              <select
+                value={addedByFilter}
+                onChange={(e) => setAddedByFilter(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="all">Everyone</option>
+                {addedByOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {canSeeStats && (
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -1635,7 +1703,7 @@ export default function EntryManager() {
             </div>
           )}
         </div>
-        {(search || statusFilter !== "all" || typeFilter !== "all" || tagFilter !== "all" || referralFilter !== "all" || hasDateFilter) && (
+        {hasActiveFilters && (
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-slate-500">Filtering by next meeting date{hasDateFilter ? "" : " (none set)"}</span>
             <button onClick={clearFilters} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>
@@ -1648,7 +1716,7 @@ export default function EntryManager() {
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-800">Entries</h2>
           <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            {filteredEntries.length} {search || statusFilter !== "all" || typeFilter !== "all" || tagFilter !== "all" || referralFilter !== "all" || hasDateFilter ? "found" : "total"}
+            {filteredEntries.length} {hasActiveFilters ? "found" : "total"}
           </span>
         </div>
 

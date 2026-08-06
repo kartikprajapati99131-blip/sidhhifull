@@ -49,15 +49,47 @@ export default function SalaryOverview() {
   const entries = data.filter((e) => (e.name || "").toLowerCase().includes(search.toLowerCase()));
   const grandTotal = entries.reduce((s, e) => s + e.totalIncome, 0);
 
-  const exportPdf = async (type) => {
-    setExporting(type);
+  const exportBankExcel = async () => {
+    setExporting("bank");
     try {
-      const res = await fetch(`/api/salary/export/${type}?from=${from}&to=${to}`);
+      const res = await fetch(`/api/salary/export/bank?from=${from}&to=${to}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${type}-salary-${from}-to-${to}.pdf`;
+      a.download = `bank-salary-${from}-to-${to}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportPersonalPdf = async () => {
+    setExporting("personal");
+    try {
+      const res = await fetch(`/api/salary/export/personal?from=${from}&to=${to}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `personal-salary-${from}-to-${to}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportAccountPdf = async () => {
+    setExporting("account");
+    try {
+      const res = await fetch(`/api/salary/export/acoount?from=${from}&to=${to}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `account-salary-${from}-to-${to}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -87,13 +119,17 @@ export default function SalaryOverview() {
           Apply
         </button>
         <div className="flex-1" />
-        <button onClick={() => exportPdf("bank")} disabled={exporting === "bank"}
+        <button onClick={exportBankExcel} disabled={exporting === "bank"}
           className="text-sm font-medium text-white bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60">
-          {exporting === "bank" ? "Exporting..." : "Export Bank PDF"}
+          {exporting === "bank" ? "Exporting..." : "Export Bank Excel"}
         </button>
-        <button onClick={() => exportPdf("personal")} disabled={exporting === "personal"}
+        <button onClick={exportPersonalPdf} disabled={exporting === "personal"}
           className="text-sm font-medium text-white bg-emerald-600 px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60">
           {exporting === "personal" ? "Exporting..." : "Export Personal PDF"}
+        </button>
+        <button onClick={exportAccountPdf} disabled={exporting === "account"}
+          className="text-sm font-medium text-white bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-60">
+          {exporting === "account" ? "Exporting..." : "Export Account PDF"}
         </button>
       </div>
 

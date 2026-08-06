@@ -4,7 +4,6 @@ import { computeSalarySummary } from "@/lib/salaryCalc";
 
 export async function GET(req) {
   await connectDb();
-  await requireAdmin();
 
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId") || null;

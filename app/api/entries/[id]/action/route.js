@@ -6,7 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ⚠️ adju
 import dbConnect from "@/db/connectDb";
 import Entry, { VISIT_TAGS } from "@/models/Entry";
 import { serializeEntry } from "@/lib/serializeEntry";
-import { CAN_SEE_ALL_ROLES } from "../../route";
+import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES } from "../../route";
 
 // "visited" is a new action: log a site visit with a remark and an
 // optional Sittos/Magnus/CPL tag selection, without changing status.
@@ -15,8 +15,17 @@ const ACTIONS = ["call", "onsite", "visited", "cancel", "site-confirm"];
 // Only these two actions collect Sittos/Magnus/CPL tags.
 const TAG_ACTIONS = ["site-confirm", "visited"];
 
+// Same access rule as app/api/entries/[id]/route.js:
+// - admin/subadmin: anything.
+// - sales: any customer entry, but only mistry entries they created.
+// - everyone else: only entries they created, either type.
 function canAccess(session, entry) {
-  if (CAN_SEE_ALL_ROLES.includes(session.user.role)) return true;
+  const role = session.user.role;
+  if (CAN_SEE_ALL_MISTRY_ROLES.includes(role)) return true;
+  if (CAN_SEE_ALL_ROLES.includes(role)) {
+    if (entry.type === "customer") return true;
+    return entry.createdBy?.id === session.user.id;
+  }
   return entry.createdBy?.id === session.user.id;
 }
 
