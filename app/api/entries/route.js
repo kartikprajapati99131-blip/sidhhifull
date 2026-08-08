@@ -1,8 +1,6 @@
 // app/api/entries/route.js
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-// ⚠️ Adjust this import to wherever you export `authOptions` from in your
-// NextAuth setup, e.g. "@/lib/authOptions" or "@/app/api/auth/[...nextauth]/route".
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 import dbConnect from "@/db/connectDb";
@@ -14,8 +12,10 @@ import { serializeEntry } from "@/lib/serializeEntry";
 export const CAN_SEE_ALL_ROLES = ["admin", "sales", "subadmin"];
 
 // Roles allowed to see every MISTRY entry (added by anyone). Sales is
-// deliberately excluded: sales sees all customers, but only the Mistry
-// entries they personally created.
+// deliberately excluded from the GENERAL rule: sales sees all customers,
+// but only the Mistry entries they personally created — EXCEPT for
+// overdue entries, which sales can always see regardless of owner (see
+// the "overdue override" clause in GET below).
 export const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
 
 // Roles allowed to delete entries — separate from CAN_SEE_ALL_ROLES on
@@ -23,11 +23,38 @@ export const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
 // even via a direct API call.
 export const CAN_DELETE_ROLES = ["admin", "subadmin"];
 
+// Only these roles may hit this endpoint at all. Anyone else (even if
+// authenticated) gets a 403 — this is a stricter gate than the visibility
+// filtering below, which decides *which* entries a given role can see.
+export const ALLOWED_ENTRY_ROLES = ["admin", "subadmin", "sales", "staff"];
+
+// Must match NOT_VISITED_AFTER_DAYS in the EntryManager component — an
+// entry counts as "overdue" (as opposed to just "due") once it's pending
+// and more than this many days past its nextMeetingDate. Keep these two
+// values in sync; consider moving both to a shared constants file.
+const NOT_VISITED_AFTER_DAYS = 5;
+
+// "YYYY-MM-DD" string for the cutoff date: any pending entry whose
+// nextMeetingDate is on or before this date counts as overdue. Since
+// nextMeetingDate is stored as a plain "YYYY-MM-DD" string, lexical
+// comparison ($lte) works the same as date comparison.
+function overdueCutoffDateStr() {
+  const today = new Date();
+  const cutoff = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - (NOT_VISITED_AFTER_DAYS + 1))
+  );
+  return cutoff.toISOString().slice(0, 10);
+}
+
 // GET /api/entries
 // admin & subadmin -> every entry, of both types.
-// sales             -> every customer entry, but ONLY the mistry entries
-//                       they created themselves.
-// everyone else     -> only entries they created (either type).
+// sales             -> every customer entry, every OVERDUE entry
+//                       regardless of type/owner (special override — this
+//                       is the one case where sales sees a mistry entry
+//                       they didn't create), and otherwise only the
+//                       mistry entries they created themselves.
+// staff             -> only entries they created (either type).
+// anyone else       -> 403 Forbidden, no data at all.
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -35,9 +62,17 @@ export async function GET() {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
+    const role = session.user.role;
+
+    if (!ALLOWED_ENTRY_ROLES.includes(role)) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden: your role cannot access entries" },
+        { status: 403 }
+      );
+    }
+
     await dbConnect();
 
-    const role = session.user.role;
     const seesAllMistry = CAN_SEE_ALL_MISTRY_ROLES.includes(role);
     const seesAllCustomers = CAN_SEE_ALL_ROLES.includes(role);
 
@@ -45,8 +80,11 @@ export async function GET() {
     if (seesAllMistry) {
       // admin / subadmin: no restrictions at all.
       filter = {};
-    } else if (seesAllCustomers) {
-      // sales: all customers, but mistry entries only if they created them.
+  } else if (seesAllCustomers) {
+      // sales: sees every CUSTOMER entry regardless of owner, but only
+      // the MISTRY entries they personally created. No more cross-owner
+      // override for overdue mistry entries — overdueCutoffDateStr() is
+      // kept in this file for reuse elsewhere, just not used here anymore.
       filter = {
         $or: [
           { type: "customer" },
@@ -54,7 +92,8 @@ export async function GET() {
         ],
       };
     } else {
-      // any other role: only their own entries, regardless of type.
+      // staff (or any other allowed-but-unprivileged role): only their
+      // own entries, regardless of type.
       filter = { "createdBy.id": session.user.id };
     }
 

@@ -15,14 +15,23 @@ const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
 // Roles that can delete an entry. Sales can view/add/edit but NOT delete.
 const CAN_DELETE_ROLES = ["admin", "subadmin"];
 
-// Roles that can open the "Due & overdue" screen — but that screen only
-// ever shows entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
-// days. Sales IS included here.
+// Roles that can open the "Due" screen — entries due today or overdue by
+// up to NOT_VISITED_AFTER_DAYS days. Sales IS included.
 const DUE_VIEW_ROLES = ["admin", "subadmin", "sales"];
 
-// Roles that can see "Not Visited" (overdue by MORE than
-// NOT_VISITED_AFTER_DAYS days), "Today's Updates" (activity log), and use
-// the date-range filter. Sales is intentionally NOT in this list.
+// Roles that can open the "Overdue" screen — entries overdue by MORE than
+// NOT_VISITED_AFTER_DAYS days. This is now its own separate screen (not
+// nested inside Due), and sales IS included, same as Due.
+const OVERDUE_VIEW_ROLES = ["admin", "subadmin", "sales"];
+
+// Roles that can open "Today's Updates" (the activity log). Sales IS
+// included, but gets a personal-only version of the screen — see
+// restrictToUserId below — titled "My Updates" and showing only what that
+// sales person themselves logged.
+const ACTIVITY_VIEW_ROLES = ["admin", "subadmin", "sales"];
+
+// Roles that can see the date-range filter and the "Added by" dropdown
+// filter on the main list. Sales is intentionally NOT in this list.
 const ADMIN_SUBADMIN_ROLES = ["admin", "subadmin"];
 
 // Customer success-ratio panel (reveals per-staff conversion rates) — admin only.
@@ -88,7 +97,7 @@ const ACTIVITY_FILTERS = [
 ];
 
 // Customer / Mistry toggle — shared across the main list, Today's Updates,
-// and Due & overdue so picking "Customer" hides Mistry entries everywhere
+// Due, and Overdue so picking "Customer" hides Mistry entries everywhere
 // and vice versa.
 const TYPE_FILTERS = [
   { value: "all", label: "All" },
@@ -99,8 +108,7 @@ const TYPE_FILTERS = [
 // Sittos / Magnus / CPL tags. Picked (multi-select) whenever a "Confirm
 // site" or "Mark visited" action is logged; the tag FILTER below picks one
 // at a time (same "All / X / Y / Z" pattern as the type toggle) and is
-// shared across the main list, Today's Updates, and Due & overdue — exactly
-// like TYPE_FILTERS.
+// shared across every screen — exactly like TYPE_FILTERS.
 const VISIT_TAGS = ["Sittos", "Magnus", "CPL"];
 
 const TAG_FILTERS = [
@@ -123,11 +131,8 @@ const hasArchitectInfo = (e) => Boolean(e.architectName?.trim() || e.architectNu
 
 // The full, current set of tags for an entry. Prefers the entry's own
 // `tags` field (set by the backend), but if that ever comes back empty —
-// e.g. an older API response, or a `serializeEntry` that hasn't been
-// updated to pass `tags` through — falls back to rebuilding it from the
+// e.g. an older API response — falls back to rebuilding it from the
 // history itself (every "site-confirm" / "visited" action's tags, unioned).
-// This is what EVERY tag filter and EVERY tag badge in this file reads, so
-// tag filtering keeps working even if the entry-level field is missing.
 function getEntryTags(entry) {
   if (entry?.tags?.length) return entry.tags;
   const set = new Set();
@@ -168,8 +173,7 @@ function FilterToggle({ options, value, onChange, className = "" }) {
 }
 
 // Single combined tag badge — e.g. picking Sittos + Magnus always renders
-// as ONE pill reading "Sittos-Magnus", shown on cards / detail views
-// wherever an entry (or a single history item) carries visit tags.
+// as ONE pill reading "Sittos-Magnus".
 function TagBadge({ tags, size = "sm" }) {
   const label = combineTags(tags);
   if (!label) return null;
@@ -181,16 +185,35 @@ function TagBadge({ tags, size = "sm" }) {
   );
 }
 
-// "Today's Updates" — every add / call / on-site / visit / confirm / cancel
-// / edit across all entries currently visible to this user, newest first,
-// with Today/Yesterday/N-days-ago labels and an optional date range.
-function ActivityLogView({ entries, typeFilter, onTypeFilterChange, tagFilter, onTagFilterChange, onBack, onOpenDetail }) {
+// "Today's Updates" / "My Updates" — every add / call / on-site / visit /
+// confirm / cancel / edit across all entries currently visible to this
+// user, newest first, with Today/Yesterday/N-days-ago labels and an
+// optional date range.
+//
+// restrictToUserId: when set (sales), the feed is narrowed down to ONLY
+// activity performed by that user — the screen becomes "My Updates" and
+// shows exactly what that sales person has personally logged, nothing
+// added or actioned by anyone else.
+function ActivityLogView({
+  entries,
+  typeFilter,
+  onTypeFilterChange,
+  tagFilter,
+  onTagFilterChange,
+  onBack,
+  onOpenDetail,
+  restrictToUserId,
+}) {
   const [filter, setFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const feed = useMemo(() => buildActivityFeed(entries), [entries]);
+  const fullFeed = useMemo(() => buildActivityFeed(entries), [entries]);
+  const feed = useMemo(
+    () => (restrictToUserId ? fullFeed.filter((a) => a.by?.id === restrictToUserId) : fullFeed),
+    [fullFeed, restrictToUserId]
+  );
   const hasCustomRange = Boolean(dateFrom || dateTo);
 
   const filtered = feed.filter((a) => {
@@ -203,6 +226,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, tagFilter, o
 
   const todayCount = feed.filter((a) => isToday(a.time)).length;
   const clearRange = () => { setDateFrom(""); setDateTo(""); };
+  const screenTitle = restrictToUserId ? "My Updates" : "Today's Updates";
 
   return (
     <div className="space-y-4">
@@ -215,7 +239,7 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, tagFilter, o
           <span className="sm:hidden">Back</span>
           <span className="hidden sm:inline">Back to entries</span>
         </button>
-        <h2 className="text-base font-semibold text-slate-800">Today&apos;s Updates</h2>
+        <h2 className="text-base font-semibold text-slate-800">{screenTitle}</h2>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={onTagFilterChange} />
           <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={onTypeFilterChange} />
@@ -225,13 +249,17 @@ function ActivityLogView({ entries, typeFilter, onTypeFilterChange, tagFilter, o
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">All Updates</h3>
-            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">Every remark — new entries, calls, on-site visits, visit logs, confirmations, cancellations, edits</p>
+            <h3 className="text-sm font-semibold text-slate-800">{restrictToUserId ? "Your Updates" : "All Updates"}</h3>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+              {restrictToUserId
+                ? "Everything you've personally logged — new entries, calls, on-site visits, visit logs, confirmations, cancellations, edits"
+                : "Every remark — new entries, calls, on-site visits, visit logs, confirmations, cancellations, edits"}
+            </p>
           </div>
           <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">{todayCount} today</span>
         </div>
 
-        {/* Mobile: one compact row — activity dropdown + a Date toggle — instead of pills and an open date range */}
+        {/* Mobile: one compact row — activity dropdown + a Date toggle */}
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 sm:hidden">
           <select
             value={filter}
@@ -429,16 +457,16 @@ function daysOverdue(entry) {
 
 const NOT_VISITED_AFTER_DAYS = 5;
 
-// Due & overdue page: only entries due today, or overdue by up to 5 days.
+// Due screen: only entries due today, or overdue by up to 5 days.
 const isDueOrOverdue = (e) => {
   if (e.status !== "pending" || !e.nextMeetingDate) return false;
   const d = daysOverdue(e);
   return d >= 0 && d <= NOT_VISITED_AFTER_DAYS;
 };
 
-// Anything overdue by more than 5 days falls off the due/overdue page and
-// lands here instead — it still needs attention, just not mixed in with
-// fresh follow-ups.
+// Overdue screen: overdue by MORE than 5 days. This is its own separate
+// screen now, no longer nested inside Due — same visibility rule as Due
+// (admin, subadmin, sales all get their own "Overdue" button).
 const isNotVisited = (e) => {
   if (e.status !== "pending" || !e.nextMeetingDate) return false;
   const d = daysOverdue(e);
@@ -501,7 +529,7 @@ const ACTIVITY_META = {
 };
 
 // Flattens every entry's creation + full history into one timestamp-sorted
-// activity feed — mirrors the "All Updates" view from the payments module.
+// activity feed.
 function buildActivityFeed(entries) {
   const list = [];
   for (const entry of entries) {
@@ -581,8 +609,7 @@ function Field({ field, value, onChange }) {
 }
 
 // One dropdown holding every status action (Confirm / Visited / Call /
-// On-site / Cancel) plus Edit and (if allowed) Delete — replaces the old
-// row of separate buttons.
+// On-site / Cancel) plus Edit and (if allowed) Delete.
 function ActionMenu({ entry, canDelete, onAction, onEdit, onDelete, align = "right" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -658,7 +685,7 @@ function DetailRow({ label, value }) {
 }
 
 // Full-detail popup opened by clicking any entry — every field, plus the
-// complete history timeline, laid out clearly instead of squeezed into a row.
+// complete history timeline.
 function DetailModal({ entry, onClose }) {
   if (!entry) return null;
   const isCustomer = entry.type === "customer";
@@ -733,7 +760,8 @@ function DetailModal({ entry, onClose }) {
 }
 
 // A single entry rendered as a card — used on small screens instead of a
-// horizontally-scrolling table row.
+// horizontally-scrolling table row, and for every card-grid screen
+// (main list, Due, Overdue).
 function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   return (
@@ -878,6 +906,71 @@ function StatsPanel({ entries }) {
   );
 }
 
+// Shared shell for the Due and Overdue screens — same header pattern
+// (back button, title, count badge, tag/type filters), same subtitle-then-
+// grid-of-cards layout, just fed different entries/copy from the caller.
+function EntryScreen({
+  title,
+  badgeCount,
+  badgeClass,
+  subtitle,
+  entries,
+  emptyMessage,
+  tagFilter,
+  onTagFilterChange,
+  typeFilter,
+  onTypeFilterChange,
+  onBack,
+  canDelete,
+  onAction,
+  onEdit,
+  onDelete,
+  onOpenDetail,
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Back to entries
+          </button>
+          <h2 className="text-base font-semibold text-slate-800">{title}</h2>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass}`}>{badgeCount}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={onTagFilterChange} />
+          <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={onTypeFilterChange} />
+        </div>
+      </div>
+      <p className="text-xs text-slate-500">{subtitle}</p>
+
+      {entries.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400">
+          {emptyMessage}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {entries.map((entry) => (
+            <EntryCard
+              key={entry.id}
+              entry={entry}
+              canDelete={canDelete}
+              onAction={onAction}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onOpenDetail={onOpenDetail}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EntryManager() {
   const { data: session } = useSession();
   const currentUser = {
@@ -895,13 +988,19 @@ export default function EntryManager() {
   // canDelete is separate from canSeeAll: sales can view all entries but
   // must NOT be able to delete them — only admin and subadmin can.
   const canDelete = CAN_DELETE_ROLES.includes(currentUser.role);
-  // canSeeDue = allowed to open "Due & overdue" (today + up to
-  // NOT_VISITED_AFTER_DAYS days overdue). Sales IS included.
+  // canSeeDue = allowed to open "Due" (today + up to NOT_VISITED_AFTER_DAYS
+  // days overdue). Sales IS included.
   const canSeeDue = DUE_VIEW_ROLES.includes(currentUser.role);
-  // canSeeStats = allowed to see "Not Visited", "Today's Updates", the
-  // date-range filter, AND the "Added by" dropdown filter. Sales is
-  // deliberately excluded here even though sales can see all customers
-  // (canSeeAll) and can open Due & overdue (canSeeDue) above.
+  // canSeeOverdue = allowed to open "Overdue" (more than
+  // NOT_VISITED_AFTER_DAYS days overdue). Its own separate screen and
+  // button now — sales IS included, same as Due.
+  const canSeeOverdue = OVERDUE_VIEW_ROLES.includes(currentUser.role);
+  // canSeeActivity = allowed to open "Today's Updates" / "My Updates".
+  // Sales IS included, but gets a personal-only feed — see
+  // restrictToUserId passed to ActivityLogView below.
+  const canSeeActivity = ACTIVITY_VIEW_ROLES.includes(currentUser.role);
+  // canSeeStats = allowed to see the date-range filter and the "Added by"
+  // dropdown filter on the main list. Sales is deliberately excluded here.
   const canSeeStats = ADMIN_SUBADMIN_ROLES.includes(currentUser.role);
   const canSeeSuccessRatio = SUCCESS_RATIO_ROLES.includes(currentUser.role);
 
@@ -929,22 +1028,19 @@ export default function EntryManager() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared by list, Today's Updates, Due & overdue
-  const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere, same as typeFilter
+  const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared everywhere
+  const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere
   const [referralFilter, setReferralFilter] = useState("all"); // "all" | "mistry" | "architect" — customer-only, main list
   // "Added by" — admin/subadmin only. Shortlists EITHER customer or mistry
   // entries down to a single staff member's additions. Shared through
-  // baseFilteredEntries so it also narrows Due & overdue / Today's Updates.
+  // baseFilteredEntries so it also narrows Due / Overdue / Today's Updates.
   const [addedByFilter, setAddedByFilter] = useState("all"); // "all" | createdBy.id
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // "due" and "activity" completely replace the normal list — dedicated
-  // screens, not panels stacked on top of everything else. Both are
-  // admin/subadmin-only (see canSeeStats below). Sales can never reach
-  // either screen, no matter how `view` gets set.
-  const [view, setView] = useState("list"); // "list" | "due" | "activity"
-  const [showNotVisited, setShowNotVisited] = useState(false);
+  // "due", "overdue", and "activity" completely replace the normal list —
+  // dedicated screens, not panels stacked on top of everything else.
+  const [view, setView] = useState("list"); // "list" | "due" | "overdue" | "activity"
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -973,47 +1069,43 @@ export default function EntryManager() {
   }, [fetchEntries]);
 
   // If a role ends up on a gated view it isn't allowed to see — e.g. role
-  // changes mid-session, stale state, or a manually crafted state update —
-  // bounce straight back to the normal list. "due" is allowed for sales;
-  // "activity" (Today's Updates) is admin/subadmin only.
+  // changes mid-session, stale state — bounce straight back to the normal
+  // list. Each view is checked against its own permission.
   useEffect(() => {
-    if (view === "due" && !canSeeDue) {
-      setView("list");
-    }
-    if (view === "activity" && !canSeeStats) {
-      setView("list");
-    }
-  }, [view, canSeeDue, canSeeStats]);
+    if (view === "due" && !canSeeDue) setView("list");
+    if (view === "overdue" && !canSeeOverdue) setView("list");
+    if (view === "activity" && !canSeeActivity) setView("list");
+  }, [view, canSeeDue, canSeeOverdue, canSeeActivity]);
 
-  // Base pipeline shared by the main list, the Due & overdue screen, and
-  // (indirectly, via its own props) Today's Updates: entry type, visit
-  // tag, Mistry-ownership restriction, and the admin/subadmin "Added by"
-  // shortlist. Everything else (status, referral, search, date range)
-  // only applies to the main "Entries" list further down.
+  // Base pipeline shared by the main list, Due, Overdue, and (indirectly,
+  // via its own props) Today's Updates: entry type, visit tag, Mistry-
+  // ownership restriction, and the admin/subadmin "Added by" shortlist.
   const baseFilteredEntries = useMemo(
     () =>
       entries.filter((e) => {
         if (typeFilter !== "all" && e.type !== typeFilter) return false;
         if (tagFilter !== "all" && !getEntryTags(e).includes(tagFilter)) return false;
-        // Mistry entries: only admin/subadmin can see everyone's. Everyone
-        // else (sales) only ever sees the Mistry entries they added
-        // themselves — customers are unaffected by this check.
-        if (e.type === "mistry" && !canSeeAllMistry && e.createdBy?.id !== currentUser.id) return false;
+       
+        if (
+          e.type === "mistry" &&
+          !canSeeAllMistry &&
+          e.createdBy?.id !== currentUser.id &&
+          !(currentUser.role === "sales" && isNotVisited(e))
+        ) {
+          return false;
+        }
         // Admin/subadmin-only shortlist by whoever added the entry —
         // works for both Customer and Mistry lists.
         if (addedByFilter !== "all" && e.createdBy?.id !== addedByFilter) return false;
         return true;
       }),
-    [entries, typeFilter, tagFilter, canSeeAllMistry, currentUser.id, addedByFilter]
+    [entries, typeFilter, tagFilter, canSeeAllMistry, currentUser.id, currentUser.role, addedByFilter]
   );
 
   const dueEntries = useMemo(() => baseFilteredEntries.filter(isDueOrOverdue), [baseFilteredEntries]);
   const notVisitedEntries = useMemo(() => baseFilteredEntries.filter(isNotVisited), [baseFilteredEntries]);
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
-  // "Added by" dropdown options — admin/subadmin only, built from whoever
-  // has actually added something, so the list never shows stale/empty
-  // names. Works for both entry types since it's just createdBy.
   const addedByOptions = useMemo(() => {
     if (!canSeeStats) return [];
     const map = new Map();
@@ -1272,7 +1364,7 @@ export default function EntryManager() {
   const editFields = editEntryType === "customer" ? CUSTOMER_FIELDS : MISTRY_FIELDS;
   const actionNeedsTags = actionModal && (actionModal.action === "site-confirm" || actionModal.action === "visited");
 
-  // ── Shared modals (used by both the list view and the due view) ────────
+  // ── Shared modals (used by every view) ──────────────────────────────────
   const modals = (
     <>
       <DetailModal entry={detailEntry} onClose={() => setDetailEntryId(null)} />
@@ -1397,10 +1489,10 @@ export default function EntryManager() {
     </>
   );
 
-  // ── Dedicated "Today's Updates" screen — admin/subadmin only. Sales
-  // falls through to the normal list view below because canSeeStats is
-  // false for sales. ────────────────────────────────────────────────────
-  if (view === "activity" && canSeeStats) {
+  // ── Dedicated "Today's Updates" / "My Updates" screen — admin,
+  // subadmin, and sales. Sales gets restrictToUserId set, so the feed is
+  // narrowed to only what that sales person themselves logged. ──────────
+  if (view === "activity" && canSeeActivity) {
     return (
       <div className="space-y-4">
         <Toast toast={toast} />
@@ -1412,97 +1504,68 @@ export default function EntryManager() {
           onTagFilterChange={setTagFilter}
           onBack={() => setView("list")}
           onOpenDetail={(id) => setDetailEntryId(id)}
+          restrictToUserId={currentUser.role === "sales" ? currentUser.id : null}
         />
         {modals}
       </div>
     );
   }
 
-  // ── Dedicated "Due & overdue" screen — admin, subadmin, AND sales can
-  // open this. It only ever lists entries due today or overdue by up to
-  // NOT_VISITED_AFTER_DAYS days. The "Not Visited" section further down
-  // is gated separately by canSeeStats (admin/subadmin only), so sales
-  // never sees entries overdue by more than NOT_VISITED_AFTER_DAYS. ─────
+  // ── Dedicated "Due" screen — admin, subadmin, AND sales. Only ever
+  // lists entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
+  // days. ─────────────────────────────────────────────────────────────
   if (view === "due" && canSeeDue) {
     return (
       <div className="space-y-4">
         <Toast toast={toast} />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setView("list")}
-              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Back to entries
-            </button>
-            <h2 className="text-base font-semibold text-slate-800">Due &amp; overdue</h2>
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">{dueEntries.length}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
-            <FilterToggle options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
-          </div>
-        </div>
-        <p className="text-xs text-slate-500">Meetings due today or overdue by up to {NOT_VISITED_AFTER_DAYS} days. Anything older moves to Not Visited below.</p>
+        <EntryScreen
+          title="Due"
+          badgeCount={dueEntries.length}
+          badgeClass="bg-red-50 text-red-600"
+          subtitle={`Meetings due today or overdue by up to ${NOT_VISITED_AFTER_DAYS} days. Anything older shows up under Overdue instead.`}
+          entries={dueEntries}
+          emptyMessage="Nothing due or overdue right now 🎉"
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onBack={() => setView("list")}
+          canDelete={canDelete}
+          onAction={(e, a) => openActionModal(e, a)}
+          onEdit={openEditModal}
+          onDelete={setDeleteTarget}
+          onOpenDetail={(e) => setDetailEntryId(e.id)}
+        />
+        {modals}
+      </div>
+    );
+  }
 
-        {dueEntries.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400">
-            Nothing due or overdue right now 🎉
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {dueEntries.map((entry) => (
-              <EntryCard
-                key={entry.id}
-                entry={entry}
-                canDelete={canDelete}
-                onAction={(e, a) => openActionModal(e, a)}
-                onEdit={openEditModal}
-                onDelete={setDeleteTarget}
-                onOpenDetail={(e) => setDetailEntryId(e.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Not Visited — overdue by more than 5 days. Admin/subadmin only:
-            sales can open this "Due & overdue" screen (canSeeDue) but must
-            NOT see entries overdue by more than NOT_VISITED_AFTER_DAYS
-            days, so this whole section requires canSeeStats separately. */}
-        {canSeeStats && notVisitedEntries.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <button
-              onClick={() => setShowNotVisited((v) => !v)}
-              className="flex w-full items-center justify-between gap-3"
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                Not Visited
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{notVisitedEntries.length}</span>
-              </span>
-              <svg className={`h-4 w-4 text-slate-400 transition-transform ${showNotVisited ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <p className="mt-1 text-xs text-slate-500">Overdue by more than {NOT_VISITED_AFTER_DAYS} days — no longer counted as active follow-ups.</p>
-            {showNotVisited && (
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {notVisitedEntries.map((entry) => (
-                  <EntryCard
-                    key={entry.id}
-                    entry={entry}
-                    canDelete={canDelete}
-                    onAction={(e, a) => openActionModal(e, a)}
-                    onEdit={openEditModal}
-                    onDelete={setDeleteTarget}
-                    onOpenDetail={(e) => setDetailEntryId(e.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
+  // ── Dedicated "Overdue" screen — admin, subadmin, AND sales. Its own
+  // separate button/screen now, no longer nested inside Due. Only ever
+  // lists entries overdue by MORE than NOT_VISITED_AFTER_DAYS days. ────
+  if (view === "overdue" && canSeeOverdue) {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <EntryScreen
+          title="Overdue"
+          badgeCount={notVisitedEntries.length}
+          badgeClass="bg-slate-100 text-slate-600"
+          subtitle={`Overdue by more than ${NOT_VISITED_AFTER_DAYS} days — no longer counted with today's Due list.`}
+          entries={notVisitedEntries}
+          emptyMessage="Nothing overdue 🎉"
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onBack={() => setView("list")}
+          canDelete={canDelete}
+          onAction={(e, a) => openActionModal(e, a)}
+          onEdit={openEditModal}
+          onDelete={setDeleteTarget}
+          onOpenDetail={(e) => setDetailEntryId(e.id)}
+        />
         {modals}
       </div>
     );
@@ -1524,28 +1587,43 @@ export default function EntryManager() {
             : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Today's Updates: admin + subadmin only. Sales will never see
-              this button because canSeeStats is false for "sales". */}
-          {canSeeStats && (
+          {/* Today's Updates / My Updates: admin, subadmin, and sales. Sales
+              gets its own personal-activity-only version of this screen. */}
+          {canSeeActivity && (
             <button
               onClick={() => setView("activity")}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
-              Today&apos;s Updates
+              {currentUser.role === "sales" ? "My Updates" : "Today's Updates"}
             </button>
           )}
-          {/* Due & overdue: admin + subadmin + sales. Sales only ever sees
-              entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
-              days — "Not Visited" stays hidden for sales inside the screen. */}
+          {/* Due: entries due today or overdue by up to NOT_VISITED_AFTER_DAYS
+              days. Admin, subadmin, and sales. */}
           {canSeeDue && (
             <button
               onClick={() => setView("due")}
               className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
-              Due &amp; overdue
+              Due
               {dueEntries.length > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                   {dueEntries.length}
+                </span>
+              )}
+            </button>
+          )}
+          {/* Overdue: overdue by MORE than NOT_VISITED_AFTER_DAYS days — its
+              own separate button/screen now, no longer nested inside Due.
+              Admin, subadmin, and sales. */}
+          {canSeeOverdue && (
+            <button
+              onClick={() => setView("overdue")}
+              className="relative rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Overdue
+              {notVisitedEntries.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-slate-500 px-1 text-[10px] font-bold text-white">
+                  {notVisitedEntries.length}
                 </span>
               )}
             </button>
