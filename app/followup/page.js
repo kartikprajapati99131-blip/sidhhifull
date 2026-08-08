@@ -761,7 +761,7 @@ function DetailModal({ entry, onClose }) {
 
 // A single entry rendered as a card — used on small screens instead of a
 // horizontally-scrolling table row, and for every card-grid screen
-// (main list, Due, Overdue).
+// (main list, Due, Overdue, Completed, Cancelled).
 function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   return (
@@ -905,10 +905,12 @@ function StatsPanel({ entries }) {
     </div>
   );
 }
+ 
 
-// Shared shell for the Due and Overdue screens — same header pattern
-// (back button, title, count badge, tag/type filters), same subtitle-then-
-// grid-of-cards layout, just fed different entries/copy from the caller.
+// Shared shell for the Due, Overdue, Completed, and Cancelled screens —
+// same header pattern (back button, title, count badge, tag/type filters),
+// same subtitle-then-grid-of-cards layout, just fed different
+// entries/copy from the caller.
 function EntryScreen({
   title,
   badgeCount,
@@ -1027,20 +1029,23 @@ export default function EntryManager() {
   const [detailEntryId, setDetailEntryId] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared everywhere
   const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere
   const [referralFilter, setReferralFilter] = useState("all"); // "all" | "mistry" | "architect" — customer-only, main list
   // "Added by" — admin/subadmin only. Shortlists EITHER customer or mistry
   // entries down to a single staff member's additions. Shared through
-  // baseFilteredEntries so it also narrows Due / Overdue / Today's Updates.
+  // baseFilteredEntries so it also narrows Due / Overdue / Completed /
+  // Cancelled / Today's Updates.
   const [addedByFilter, setAddedByFilter] = useState("all"); // "all" | createdBy.id
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // "due", "overdue", and "activity" completely replace the normal list —
-  // dedicated screens, not panels stacked on top of everything else.
-  const [view, setView] = useState("list"); // "list" | "due" | "overdue" | "activity"
+  // "due", "overdue", "activity", "completed", and "cancelled" completely
+  // replace the normal list — dedicated screens, not panels stacked on top
+  // of everything else. The main "list" view only ever shows PENDING
+  // entries; site-confirmed and cancelled entries live exclusively on
+  // their own dedicated screens.
+  const [view, setView] = useState("list"); // "list" | "due" | "overdue" | "activity" | "completed" | "cancelled"
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -1077,9 +1082,10 @@ export default function EntryManager() {
     if (view === "activity" && !canSeeActivity) setView("list");
   }, [view, canSeeDue, canSeeOverdue, canSeeActivity]);
 
-  // Base pipeline shared by the main list, Due, Overdue, and (indirectly,
-  // via its own props) Today's Updates: entry type, visit tag, Mistry-
-  // ownership restriction, and the admin/subadmin "Added by" shortlist.
+  // Base pipeline shared by the main list, Due, Overdue, Completed,
+  // Cancelled, and (indirectly, via its own props) Today's Updates: entry
+  // type, visit tag, Mistry-ownership restriction, and the admin/subadmin
+  // "Added by" shortlist.
   const baseFilteredEntries = useMemo(
     () =>
       entries.filter((e) => {
@@ -1104,6 +1110,22 @@ export default function EntryManager() {
 
   const dueEntries = useMemo(() => baseFilteredEntries.filter(isDueOrOverdue), [baseFilteredEntries]);
   const notVisitedEntries = useMemo(() => baseFilteredEntries.filter(isNotVisited), [baseFilteredEntries]);
+
+  // Sort by name, A → Z. Entries with no name fall to the end.
+  const sortByNameAsc = (list) =>
+    [...list].sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+
+  // Completed screen: every site-confirmed entry, alphabetical by name.
+  const completedEntries = useMemo(
+    () => sortByNameAsc(baseFilteredEntries.filter((e) => e.status === "site-confirmed")),
+    [baseFilteredEntries]
+  );
+  // Cancelled screen: every cancelled entry, alphabetical by name.
+  const cancelledEntries = useMemo(
+    () => sortByNameAsc(baseFilteredEntries.filter((e) => e.status === "cancelled")),
+    [baseFilteredEntries]
+  );
+
   const detailEntry = useMemo(() => entries.find((e) => e.id === detailEntryId) || null, [entries, detailEntryId]);
 
   const addedByOptions = useMemo(() => {
@@ -1115,10 +1137,13 @@ export default function EntryManager() {
     return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [entries, canSeeStats]);
 
+  // Main "Entries" table/cards: PENDING ONLY. Site-confirmed and cancelled
+  // entries never show up here — they live exclusively on the dedicated
+  // Completed / Cancelled screens.
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
     return baseFilteredEntries
-      .filter((e) => (statusFilter === "all" ? true : e.status === statusFilter))
+      .filter((e) => e.status === "pending")
       .filter((e) => {
         if (referralFilter === "all") return true;
         if (e.type !== "customer") return false;
@@ -1146,12 +1171,11 @@ export default function EntryManager() {
           e.architectNumber?.includes(q)
         );
       });
-  }, [baseFilteredEntries, search, statusFilter, referralFilter, fromDate, toDate, canSeeStats]);
+  }, [baseFilteredEntries, search, referralFilter, fromDate, toDate, canSeeStats]);
 
   const hasDateFilter = canSeeStats && !!(fromDate || toDate);
   const hasActiveFilters =
     search ||
-    statusFilter !== "all" ||
     typeFilter !== "all" ||
     tagFilter !== "all" ||
     referralFilter !== "all" ||
@@ -1160,7 +1184,6 @@ export default function EntryManager() {
 
   const clearFilters = () => {
     setSearch("");
-    setStatusFilter("all");
     setTypeFilter("all");
     setTagFilter("all");
     setReferralFilter("all");
@@ -1571,7 +1594,67 @@ export default function EntryManager() {
     );
   }
 
-  // ── Normal entries view ─────────────────────────────────────────────────
+  // ── Dedicated "Completed" screen — every site-confirmed entry, A → Z.
+  // Same visibility as the main list itself: no extra role gate, just the
+  // ordinary Mistry-ownership / Added-by filtering already baked into
+  // baseFilteredEntries. ───────────────────────────────────────────────
+  if (view === "completed") {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <EntryScreen
+          title="Completed"
+          badgeCount={completedEntries.length}
+          badgeClass="bg-emerald-50 text-emerald-700"
+          subtitle="Every site-confirmed entry, sorted alphabetically (A → Z)."
+          entries={completedEntries}
+          emptyMessage="No site-confirmed entries yet."
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onBack={() => setView("list")}
+          canDelete={canDelete}
+          onAction={(e, a) => openActionModal(e, a)}
+          onEdit={openEditModal}
+          onDelete={setDeleteTarget}
+          onOpenDetail={(e) => setDetailEntryId(e.id)}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Dedicated "Cancelled" screen — every cancelled entry, A → Z. Same
+  // visibility as the main list itself. ─────────────────────────────────
+  if (view === "cancelled") {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <EntryScreen
+          title="Cancelled"
+          badgeCount={cancelledEntries.length}
+          badgeClass="bg-rose-50 text-rose-700"
+          subtitle="Every cancelled entry, sorted alphabetically (A → Z)."
+          entries={cancelledEntries}
+          emptyMessage="No cancelled entries."
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onBack={() => setView("list")}
+          canDelete={canDelete}
+          onAction={(e, a) => openActionModal(e, a)}
+          onEdit={openEditModal}
+          onDelete={setDeleteTarget}
+          onOpenDetail={(e) => setDetailEntryId(e.id)}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Normal entries view (PENDING ONLY) ──────────────────────────────────
   return (
     <div className="space-y-6">
       <Toast toast={toast} />
@@ -1698,7 +1781,7 @@ export default function EntryManager() {
           <label className="text-xs font-medium text-slate-600">Tag</label>
           <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
         </div>
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
             <div className="relative">
@@ -1713,19 +1796,6 @@ export default function EntryManager() {
                 <button type="button" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">✕</button>
               )}
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="site-confirmed">Site Confirmed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Referral</label>
@@ -1789,13 +1859,42 @@ export default function EntryManager() {
         )}
       </div>
 
-      {/* ── Entries: table on larger screens, cards on small screens ── */}
+      {/* ── Entries: table on larger screens, cards on small screens ──
+          Pending only — completed (site-confirmed) and cancelled entries
+          live on their own dedicated screens, linked right below. ── */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-800">Entries</h2>
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            {filteredEntries.length} {hasActiveFilters ? "found" : "total"}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+              {filteredEntries.length} {hasActiveFilters ? "found" : "total"}
+            </span>
+            {/* Completed / Cancelled: dedicated alphabetical (A → Z) pages.
+                Site-confirmed and cancelled entries never show in the
+                pending table above — they only live here. */}
+            <button
+              onClick={() => setView("completed")}
+              className="relative rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              Completed
+              {completedEntries.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {completedEntries.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setView("cancelled")}
+              className="relative rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+            >
+              Cancelled
+              {cancelledEntries.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {cancelledEntries.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {loading ? (
