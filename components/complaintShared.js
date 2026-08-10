@@ -164,24 +164,81 @@ export function StatCard({ label, value, tone = "slate", icon, onClick, active }
   );
 }
 
-// Reusable modal shell: backdrop click-to-close + Escape-to-close + fade/scale-in.
-export function Modal({ onClose, maxWidth = "max-w-sm", children }) {
+export const STATUS_ICON = {
+  pending: "🕓",
+  "call-site": "☎",
+  "need-visit": "⚑",
+  "follow-up": "↻",
+  completed: "✅",
+};
+
+export const STATUS_ACCENT = {
+  pending: "slate",
+  "call-site": "sky",
+  "need-visit": "amber",
+  "follow-up": "violet",
+  completed: "emerald",
+};
+
+const ACCENT_TONES = {
+  indigo: { bg: "from-indigo-50", icon: "bg-indigo-100 text-indigo-600" },
+  emerald: { bg: "from-emerald-50", icon: "bg-emerald-100 text-emerald-600" },
+  amber: { bg: "from-amber-50", icon: "bg-amber-100 text-amber-600" },
+  violet: { bg: "from-violet-50", icon: "bg-violet-100 text-violet-600" },
+  sky: { bg: "from-sky-50", icon: "bg-sky-100 text-sky-600" },
+  red: { bg: "from-red-50", icon: "bg-red-100 text-red-600" },
+  slate: { bg: "from-slate-50", icon: "bg-slate-100 text-slate-600" },
+};
+
+// Reusable modal shell with a proper header: an icon bubble, title,
+// optional subtitle, a soft gradient wash tinted to the action's accent
+// color, and a built-in close button — so every popup in the app shares
+// the same polished chrome instead of each screen hand-rolling its own.
+// Backdrop click-to-close + Escape-to-close + fade/scale-in are baked in.
+export function Modal({ onClose, maxWidth = "max-w-sm", icon, title, subtitle, accent = "indigo", headerRight, children }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const tone = ACCENT_TONES[accent] || ACCENT_TONES.indigo;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-[2px] animate-[fadeIn_0.15s_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]"
       onClick={onClose}
     >
       <div
-        className={`w-full ${maxWidth} rounded-xl bg-white p-5 shadow-2xl animate-[popIn_0.18s_ease-out]`}
+        className={`w-full ${maxWidth} max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 animate-[popIn_0.18s_ease-out] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
-        {children}
+        {(title || icon) && (
+          <div className={`flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-b ${tone.bg} to-white px-5 py-4`}>
+            <div className="flex min-w-0 items-start gap-3">
+              {icon && (
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg shadow-sm ${tone.icon}`}>
+                  {icon}
+                </span>
+              )}
+              <div className="min-w-0">
+                {title && <h3 className="truncate text-base font-semibold text-slate-800">{title}</h3>}
+                {subtitle && <p className="truncate text-xs text-slate-400">{subtitle}</p>}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {headerRight}
+              <button
+                onClick={onClose}
+                className="rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-600"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );

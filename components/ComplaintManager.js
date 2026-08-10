@@ -18,16 +18,18 @@ import {
   StatusBadge,
   StatCard,
   Modal,
+  STATUS_ICON,
+  STATUS_ACCENT,
   SHARED_KEYFRAMES,
   exportToCsv,
 } from "@/components/complaintShared";
 
-// Row actions -> the status they set + a display label for the shared modal.
+// Row actions -> the status they set + a display label/icon/accent for the shared modal.
 const ACTIONS = [
-  { status: "completed", label: "Complete", icon: "✓", cls: "text-emerald-700 hover:bg-emerald-50" },
-  { status: "need-visit", label: "Need Visit", icon: "⚑", cls: "text-amber-700 hover:bg-amber-50" },
-  { status: "follow-up", label: "Follow Up", icon: "↻", cls: "text-violet-700 hover:bg-violet-50" },
-  { status: "call-site", label: "Call / Site", icon: "☎", cls: "text-sky-700 hover:bg-sky-50" },
+  { status: "completed", label: "Complete", icon: "✓", accent: "emerald", cls: "text-emerald-700 hover:bg-emerald-50" },
+  { status: "need-visit", label: "Need Visit", icon: "⚑", accent: "amber", cls: "text-amber-700 hover:bg-amber-50" },
+  { status: "follow-up", label: "Follow Up", icon: "↻", accent: "violet", cls: "text-violet-700 hover:bg-violet-50" },
+  { status: "call-site", label: "Call / Site", icon: "☎", accent: "sky", cls: "text-sky-700 hover:bg-sky-50" },
 ];
 
 const emptyForm = {
@@ -870,9 +872,13 @@ export default function ComplaintManager() {
 
       {/* ── Shared Action Modal (Complete / Need Visit / Follow Up / Call-Site) ── */}
       {actionModal && (
-        <Modal onClose={closeActionModal}>
-          <h3 className="mb-1 text-base font-semibold text-slate-800">{actionModal.label}</h3>
-          <p className="mb-4 text-xs text-slate-400">{actionModal.entry.customerName}</p>
+        <Modal
+          onClose={closeActionModal}
+          icon={actionModal.icon}
+          title={actionModal.label}
+          subtitle={actionModal.entry.customerName}
+          accent={actionModal.accent}
+        >
           <form onSubmit={handleActionSubmit} className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Remark</label>
@@ -920,8 +926,7 @@ export default function ComplaintManager() {
 
       {/* ── Edit Modal ── */}
       {editingEntry && (
-        <Modal onClose={closeEditModal} maxWidth="max-w-md">
-          <h3 className="mb-4 text-base font-semibold text-slate-800">Edit Complaint</h3>
+        <Modal onClose={closeEditModal} maxWidth="max-w-md" icon="✎" title="Edit Complaint" subtitle={editingEntry.customerName} accent="indigo">
           <form onSubmit={handleEditSave} className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
@@ -981,8 +986,7 @@ export default function ComplaintManager() {
 
       {/* ── Delete Confirm Modal ── */}
       {deleteTarget && (
-        <Modal onClose={() => setDeleteTarget(null)}>
-          <h3 className="mb-2 text-base font-semibold text-slate-800">Delete Complaint</h3>
+        <Modal onClose={() => setDeleteTarget(null)} icon="🗑" title="Delete Complaint" accent="red">
           <p className="mb-5 text-sm text-slate-600">
             Are you sure you want to delete the complaint for &quot;{deleteTarget.customerName}&quot;? This cannot be undone.
           </p>
@@ -1005,32 +1009,26 @@ export default function ComplaintManager() {
       )}
 
       {/* ── Detail Modal (full history timeline) ── */}
-      {detailEntry && (
-        <Modal onClose={closeDetail} maxWidth="max-w-md">
-          {(() => {
-            const d = detailData || detailEntry;
-            const nonVisiting = isNonVisiting(d);
-            return (
-              <>
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-800">{d.customerName}</h3>
-                    <p className="text-xs text-slate-400">
-                      {d.product} · {d.assignedTo}
-                    </p>
-                  </div>
-                  <button onClick={closeDetail} className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                    ✕
-                  </button>
+      {detailEntry &&
+        (() => {
+          const d = detailData || detailEntry;
+          const nonVisiting = isNonVisiting(d);
+          return (
+            <Modal
+              onClose={closeDetail}
+              maxWidth="max-w-md"
+              icon={STATUS_ICON[d.status]}
+              title={d.customerName}
+              subtitle={`${d.product} · ${d.assignedTo}`}
+              accent={STATUS_ACCENT[d.status]}
+            >
+              {detailLoading && (
+                <div className="mb-3 space-y-2">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
                 </div>
-
-                {detailLoading && (
-                  <div className="mb-3 space-y-2">
-                    <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
-                    <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
-                  </div>
-                )}
-                {detailError && <p className="mb-3 text-sm text-red-500">{detailError}</p>}
+              )}
+              {detailError && <p className="mb-3 text-sm text-red-500">{detailError}</p>}
 
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <StatusBadge status={d.status} nonVisiting={nonVisiting} />
@@ -1092,25 +1090,13 @@ export default function ComplaintManager() {
                       ))
                   )}
                 </div>
-              </>
-            );
-          })()}
-        </Modal>
-      )}
+            </Modal>
+          );
+        })()}
 
       {/* ── Reminders Popup ── */}
       {remindersOpen && (
-        <Modal onClose={() => setRemindersOpen(false)} maxWidth="max-w-md">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-800">Reminders</h3>
-            <button
-              onClick={() => setRemindersOpen(false)}
-              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          </div>
-
+        <Modal onClose={() => setRemindersOpen(false)} maxWidth="max-w-md" icon="🔔" title="Reminders" accent="amber">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Due Today ({summary.todayDue.length})
           </p>

@@ -15,6 +15,8 @@ import {
   StatusBadge,
   StatCard,
   Modal,
+  STATUS_ICON,
+  STATUS_ACCENT,
   SHARED_KEYFRAMES,
   exportToCsv,
 } from "@/components/complaintShared";
@@ -296,93 +298,85 @@ export default function CompletedComplaints() {
       </div>
 
       {/* ── Detail Modal (full history timeline) ── */}
-      {detailEntry && (
-        <Modal onClose={closeDetail} maxWidth="max-w-md">
-          {(() => {
-            const d = detailData || detailEntry;
-            return (
-              <>
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-800">{d.customerName}</h3>
-                    <p className="text-xs text-slate-400">
-                      {d.product} · {d.assignedTo}
-                    </p>
-                  </div>
-                  <button onClick={closeDetail} className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                    ✕
-                  </button>
+      {detailEntry &&
+        (() => {
+          const d = detailData || detailEntry;
+          return (
+            <Modal
+              onClose={closeDetail}
+              maxWidth="max-w-md"
+              icon={STATUS_ICON[d.status] || "✅"}
+              title={d.customerName}
+              subtitle={`${d.product} · ${d.assignedTo}`}
+              accent={STATUS_ACCENT[d.status] || "emerald"}
+            >
+              {detailLoading && (
+                <div className="mb-3 space-y-2">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
                 </div>
+              )}
+              {detailError && <p className="mb-3 text-sm text-red-500">{detailError}</p>}
 
-                {detailLoading && (
-                  <div className="mb-3 space-y-2">
-                    <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
-                    <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
-                  </div>
-                )}
-                {detailError && <p className="mb-3 text-sm text-red-500">{detailError}</p>}
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <StatusBadge status={d.status} />
+                <a href={`tel:${d.mobileNumber}`} className="text-sm text-sky-600 hover:text-sky-800 hover:underline">
+                  +91 {d.mobileNumber}
+                </a>
+              </div>
 
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={d.status} />
-                  <a href={`tel:${d.mobileNumber}`} className="text-sm text-sky-600 hover:text-sky-800 hover:underline">
-                    +91 {d.mobileNumber}
-                  </a>
+              <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400">Address</p>
+                  <p className="font-medium text-slate-700">{d.address}</p>
                 </div>
-
-                <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
-                  <div className="col-span-2">
-                    <p className="text-xs text-slate-400">Address</p>
-                    <p className="font-medium text-slate-700">{d.address}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Completed At</p>
-                    <p className="font-medium text-slate-700">{formatDateTime(d.completedAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Completed By</p>
-                    <p className="flex items-center gap-1.5 font-medium text-slate-700">
-                      <Avatar name={d.completedBy || lastActor(d)} size={5} />
-                      {d.completedBy || lastActor(d)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Registered By</p>
-                    <p className="flex items-center gap-1.5 font-medium text-slate-700">
-                      <Avatar name={d.registeredBy} size={5} />
-                      {d.registeredBy || "—"}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-xs text-slate-400">Completed At</p>
+                  <p className="font-medium text-slate-700">{formatDateTime(d.completedAt)}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-slate-400">Completed By</p>
+                  <p className="flex items-center gap-1.5 font-medium text-slate-700">
+                    <Avatar name={d.completedBy || lastActor(d)} size={5} />
+                    {d.completedBy || lastActor(d)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Registered By</p>
+                  <p className="flex items-center gap-1.5 font-medium text-slate-700">
+                    <Avatar name={d.registeredBy} size={5} />
+                    {d.registeredBy || "—"}
+                  </p>
+                </div>
+              </div>
 
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">History</p>
-                <div className="max-h-64 space-y-2 overflow-y-auto">
-                  {(d.history || []).length === 0 ? (
-                    <p className="text-sm text-slate-400">No history yet.</p>
-                  ) : (
-                    d.history
-                      .slice()
-                      .reverse()
-                      .map((h, i) => (
-                        <div key={i} className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
-                          <div className="mb-1 flex items-center justify-between">
-                            <StatusBadge status={h.status} />
-                            <span className="text-slate-400">{formatDateTime(h.at)}</span>
-                          </div>
-                          {h.remark && <p className="text-slate-600">{h.remark}</p>}
-                          {h.followUpDate && <p className="mt-1 text-slate-400">Follow-up set for {formatDate(h.followUpDate)}</p>}
-                          <p className="mt-1.5 flex items-center gap-1 text-slate-400">
-                            <Avatar name={h.updatedBy} size={4} />
-                            Added by <span className="font-medium text-slate-500">{h.updatedBy || "Unknown User"}</span>
-                          </p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">History</p>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {(d.history || []).length === 0 ? (
+                  <p className="text-sm text-slate-400">No history yet.</p>
+                ) : (
+                  d.history
+                    .slice()
+                    .reverse()
+                    .map((h, i) => (
+                      <div key={i} className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                        <div className="mb-1 flex items-center justify-between">
+                          <StatusBadge status={h.status} />
+                          <span className="text-slate-400">{formatDateTime(h.at)}</span>
                         </div>
-                      ))
-                  )}
-                </div>
-              </>
-            );
-          })()}
-        </Modal>
-      )}
+                        {h.remark && <p className="text-slate-600">{h.remark}</p>}
+                        {h.followUpDate && <p className="mt-1 text-slate-400">Follow-up set for {formatDate(h.followUpDate)}</p>}
+                        <p className="mt-1.5 flex items-center gap-1 text-slate-400">
+                          <Avatar name={h.updatedBy} size={4} />
+                          Added by <span className="font-medium text-slate-500">{h.updatedBy || "Unknown User"}</span>
+                        </p>
+                      </div>
+                    ))
+                )}
+              </div>
+            </Modal>
+          );
+        })()}
     </div>
   );
 }
