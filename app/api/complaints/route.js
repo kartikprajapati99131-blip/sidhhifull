@@ -6,16 +6,20 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // GET /api/complaints?status=&product=&assignedTo=&search=
 //
-// status: pending | call-site | need-visit | follow-up | completed | non-visiting | all
-// Default (no status, or "all"): every complaint, active ones sorted by
-// followUpDate ascending (soonest first, nulls last), completed ones by
-// completedAt desc, with active complaints listed before completed ones.
+// status: pending | call-site | need-visit | follow-up | completed | non-visiting | active | all
+//   active    -> every complaint EXCEPT completed ones (this is what the main
+//                Complaints table uses now that completed complaints live on
+//                their own page)
+//   completed -> only completed complaints (used by the dedicated Completed
+//                page), sorted by completedAt desc
+//   all       -> everything, active first then completed (kept for the
+//                summary/reporting use case)
 export async function GET(request) {
   try {
     await dbConnect();
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "all";
+    const status = searchParams.get("status") || "active";
     const product = searchParams.get("product");
     const assignedTo = searchParams.get("assignedTo");
     const search = searchParams.get("search");
@@ -27,6 +31,8 @@ export async function GET(request) {
       query.lastUpdatedAt = { $lte: new Date(Date.now() - SEVEN_DAYS_MS) };
     } else if (status === "completed") {
       query.status = "completed";
+    } else if (status === "active") {
+      query.status = { $ne: "completed" };
     } else if (status !== "all" && status) {
       query.status = status;
     }
@@ -95,7 +101,8 @@ export async function POST(request) {
     await dbConnect();
 
     const body = await request.json();
-    const { customerName, mobileNumber, address, product, assignedTo, followUpDate, remark } = body;
+    const { customerName, mobileNumber, address, product, assignedTo, followUpDate, remark, actorName } = body;
+    const registeredBy = actorName?.trim() || "Unknown User";
 
     if (!customerName?.trim() || !mobileNumber?.trim() || !address?.trim()) {
       return NextResponse.json(
@@ -146,7 +153,11 @@ export async function POST(request) {
       remark: initialRemark,
       followUpDate: initialFollowUpDate,
       lastUpdatedAt: now,
-      history: [{ status: "pending", remark: initialRemark, followUpDate: initialFollowUpDate, at: now }],
+      registeredBy,
+      lastUpdatedBy: registeredBy,
+      history: [
+        { status: "pending", remark: initialRemark, followUpDate: initialFollowUpDate, at: now, updatedBy: registeredBy },
+      ],
     });
 
     return NextResponse.json({ success: true, data: complaint }, { status: 201 });

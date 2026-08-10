@@ -1,27 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-
-const PRODUCTS = ["Laminate", "Venner", "Plywood", "Flush Door", "Glass", "Hardware"];
-const ASSIGNEES = ["Sanjay Bhai", "Haresh Bhai", "Vijay Bhai", "Bharat Bhai", "Nitin Bhai", "Chetan Bhai"];
-
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
-const STATUS_LABELS = {
-  pending: "Pending",
-  "call-site": "Call / Site",
-  "need-visit": "Need Visit",
-  "follow-up": "Follow Up",
-  completed: "Completed",
-};
-
-const STATUS_BADGE = {
-  pending: "bg-slate-100 text-slate-600",
-  "call-site": "bg-sky-50 text-sky-700",
-  "need-visit": "bg-amber-50 text-amber-700",
-  "follow-up": "bg-violet-50 text-violet-700",
-  completed: "bg-emerald-50 text-emerald-700",
-};
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import {
+  PRODUCTS,
+  ASSIGNEES,
+  inputCls,
+  formatDate,
+  formatDateTime,
+  isToday,
+  isNonVisiting,
+  lastActor,
+  Avatar,
+  useDebounced,
+  Toast,
+  StatusBadge,
+  StatCard,
+  Modal,
+  SHARED_KEYFRAMES,
+  exportToCsv,
+} from "@/components/complaintShared";
 
 // Row actions -> the status they set + a display label for the shared modal.
 const ACTIONS = [
@@ -41,109 +40,28 @@ const emptyForm = {
   remark: "",
 };
 
-const inputCls =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
-
-function formatDate(date) {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function formatDateTime(date) {
-  if (!date) return "—";
-  return new Date(date).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function isToday(date) {
-  if (!date) return false;
-  const d = new Date(date);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
-
-function isNonVisiting(entry) {
-  if (entry.status === "completed") return false;
-  return Date.now() - new Date(entry.lastUpdatedAt).getTime() >= SEVEN_DAYS_MS;
-}
-
-// Debounce a value so we don't hammer the API on every keystroke.
-function useDebounced(value, delay = 350) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-function Toast({ toast }) {
-  if (!toast) return null;
-  const isError = toast.type === "error";
-  return (
-    <div
-      className={`fixed bottom-5 right-5 z-[100] animate-[slideUp_0.25s_ease-out] rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg ${
-        isError ? "bg-red-600" : "bg-emerald-600"
-      }`}
-      role="status"
-    >
-      {toast.message}
-    </div>
-  );
-}
-
-function StatusBadge({ status, nonVisiting }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-        STATUS_BADGE[status] || "bg-slate-100 text-slate-600"
-      } ${nonVisiting ? "ring-2 ring-red-400" : ""}`}
-    >
-      {STATUS_LABELS[status] || status}
-    </span>
-  );
-}
-
-// Reusable modal shell: backdrop click-to-close + Escape-to-close + fade/scale-in.
-function Modal({ onClose, maxWidth = "max-w-sm", children }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-[2px] animate-[fadeIn_0.15s_ease-out]"
-      onClick={onClose}
-    >
-      <div
-        className={`w-full ${maxWidth} rounded-xl bg-white p-5 shadow-2xl animate-[popIn_0.18s_ease-out]`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export default function ComplaintManager() {
+  const { data: session } = useSession();
+  // Every write (add / edit / status change) is stamped with this name —
+  // pulled straight from the signed-in session, never a free-text field, so
+  // the "who did this" trail can be trusted.
+  const actorName = session?.user?.name || session?.user?.email || "Unknown User";
+
   const [entries, setEntries] = useState([]);
   const [summary, setSummary] = useState({
     todayUpdates: [],
     todayDue: [],
     last7DaysPending: [],
     nonVisiting: [],
+    activeCount: 0,
+    completedCount: 0,
+    completedToday: 0,
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   const [activeTab, setActiveTab] = useState("all");
@@ -184,10 +102,12 @@ export default function ComplaintManager() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
+  // Only ACTIVE (not-yet-completed) complaints live on this page — once a
+  // complaint is marked Complete it moves to the dedicated Completed page.
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ status: "all" });
+      const params = new URLSearchParams({ status: "active" });
       if (productFilter) params.set("product", productFilter);
       if (assignedToFilter) params.set("assignedTo", assignedToFilter);
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
@@ -211,14 +131,14 @@ export default function ComplaintManager() {
       const res = await fetch("/api/complaints/summary");
       const data = await res.json();
       if (data.success) {
-        setSummary(data.data);
+        setSummary((prev) => ({ ...prev, ...data.data }));
         if (!autoOpenedRef.current && (data.data.todayDue.length > 0 || data.data.last7DaysPending.length > 0)) {
           setRemindersOpen(true);
           autoOpenedRef.current = true;
         }
       }
     } catch {
-      // non-fatal — bell popup just stays empty
+      // non-fatal — bell popup and stat cards just stay at their last value
     }
   }, []);
 
@@ -263,10 +183,8 @@ export default function ComplaintManager() {
   // ---- Tab filtering (client-side, computed from lastUpdatedAt/followUpDate — no stored flags) ----
   const tabbedEntries = useMemo(() => {
     switch (activeTab) {
-      case "pending":
-        return entries.filter((e) => e.status !== "completed");
-      case "completed":
-        return entries.filter((e) => e.status === "completed");
+      case "due-today":
+        return entries.filter((e) => isToday(e.followUpDate));
       case "non-visiting":
         return entries.filter((e) => isNonVisiting(e));
       case "today":
@@ -279,8 +197,7 @@ export default function ComplaintManager() {
   const tabCounts = useMemo(
     () => ({
       all: entries.length,
-      pending: entries.filter((e) => e.status !== "completed").length,
-      completed: entries.filter((e) => e.status === "completed").length,
+      "due-today": entries.filter((e) => isToday(e.followUpDate)).length,
       "non-visiting": entries.filter((e) => isNonVisiting(e)).length,
       today: entries.filter((e) => isToday(e.lastUpdatedAt)).length,
     }),
@@ -288,9 +205,8 @@ export default function ComplaintManager() {
   );
 
   const TABS = [
-    { key: "all", label: "All" },
-    { key: "pending", label: "Pending" },
-    { key: "completed", label: "Completed" },
+    { key: "all", label: "All Active" },
+    { key: "due-today", label: "Due Today" },
     { key: "non-visiting", label: "Non-Visiting" },
     { key: "today", label: "Today's Updates" },
   ];
@@ -320,12 +236,13 @@ export default function ComplaintManager() {
       const res = await fetch("/api/complaints", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, actorName }),
       });
       const data = await res.json();
       if (data.success) {
         showToast("Complaint registered successfully");
         setForm(emptyForm);
+        setFormOpen(false);
         refreshAll();
       } else {
         showToast(data.message || "Failed to register complaint", "error");
@@ -421,6 +338,7 @@ export default function ComplaintManager() {
           product: editForm.product,
           assignedTo: editForm.assignedTo,
           followUpDate: editForm.followUpDate,
+          actorName,
         }),
       });
       const data = await res.json();
@@ -462,11 +380,16 @@ export default function ComplaintManager() {
           status: actionModal.status,
           remark: actionForm.remark.trim(),
           followUpDate: actionModal.status === "follow-up" ? actionForm.followUpDate : undefined,
+          actorName,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        showToast("Complaint updated successfully");
+        showToast(
+          actionModal.status === "completed"
+            ? "Marked as completed — moved to the Completed page"
+            : "Complaint updated successfully"
+        );
         closeActionModal();
         refreshAll();
         if (detailEntry && detailEntry._id === actionModal.entry._id) {
@@ -530,149 +453,217 @@ export default function ComplaintManager() {
     setDetailError("");
   };
 
+  const handleExport = () => {
+    exportToCsv(`active-complaints-${new Date().toISOString().slice(0, 10)}.csv`, tabbedEntries, [
+      { label: "Customer Name", value: (e) => e.customerName },
+      { label: "Mobile", value: (e) => e.mobileNumber },
+      { label: "Product", value: (e) => e.product },
+      { label: "Assigned To", value: (e) => e.assignedTo },
+      { label: "Status", value: (e) => e.status },
+      { label: "Follow-up Date", value: (e) => formatDate(e.followUpDate) },
+      { label: "Last Updated By", value: (e) => lastActor(e) },
+      { label: "Last Updated At", value: (e) => formatDateTime(e.lastUpdatedAt) },
+    ]);
+  };
+
   const reminderCount = summary.todayDue.length + summary.last7DaysPending.length;
 
   return (
     <div className="min-h-screen bg-slate-50/60">
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
-        @keyframes menuIn { from { opacity: 0; transform: scale(0.96) translateY(-4px) } to { opacity: 1; transform: scale(1) translateY(0) } }
-      `}</style>
+      <style>{SHARED_KEYFRAMES}</style>
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <Toast toast={toast} />
 
         {/* ── Page header ── */}
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-slate-900">Complaint Management</h1>
             <p className="text-sm text-slate-500">Track site visits, follow-ups and resolutions in one place.</p>
           </div>
-          <button
-            onClick={() => setRemindersOpen(true)}
-            className="relative flex w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.98]"
-          >
-            <span>🔔</span>
-            Reminders
-            {reminderCount > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white shadow-sm">
-                {reminderCount > 9 ? "9+" : reminderCount}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/complaints/completed"
+              className="flex w-fit items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 active:scale-[0.98]"
+            >
+              <span>✅</span>
+              Completed
+              <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {summary.completedCount}
               </span>
-            )}
-          </button>
+            </Link>
+            <button
+              onClick={() => setRemindersOpen(true)}
+              className="relative flex w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.98]"
+            >
+              <span>🔔</span>
+              Reminders
+              {reminderCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white shadow-sm">
+                  {reminderCount > 9 ? "9+" : reminderCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setFormOpen((v) => !v)}
+              className="flex w-fit items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98]"
+            >
+              <span>{formOpen ? "✕" : "+"}</span>
+              {formOpen ? "Close Form" : "Register Complaint"}
+            </button>
+          </div>
         </div>
 
-        {/* ── Add Complaint ── */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold text-slate-800">Register Complaint</h2>
-          <form onSubmit={handleAddEntry} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
-              <input
-                type="text"
-                name="customerName"
-                value={form.customerName}
-                onChange={handleFormChange}
-                placeholder="e.g. Rahul Sharma"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Mobile Number</label>
-              <input
-                type="tel"
-                name="mobileNumber"
-                value={form.mobileNumber}
-                onChange={handleFormChange}
-                placeholder="9876543210"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Product</label>
-              <select name="product" value={form.product} onChange={handleFormChange} className={inputCls}>
-                {PRODUCTS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Who Will Go</label>
-              <select name="assignedTo" value={form.assignedTo} onChange={handleFormChange} className={inputCls}>
-                {ASSIGNEES.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Address</label>
-              <input
-                type="text"
-                name="address"
-                value={form.address}
-                onChange={handleFormChange}
-                placeholder="Site / delivery address"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Follow-up Date</label>
-              <input
-                type="date"
-                name="followUpDate"
-                value={form.followUpDate}
-                onChange={handleFormChange}
-                className={inputCls}
-              />
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Remark <span className="font-normal text-slate-400">(optional)</span>
-              </label>
-              <input
-                type="text"
-                name="remark"
-                value={form.remark}
-                onChange={handleFormChange}
-                placeholder="Optional remark"
-                className={inputCls}
-              />
-            </div>
-
-            <div className="flex items-end sm:col-span-2 lg:col-span-3">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </form>
+        {/* ── Stat dashboard ── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Active Complaints"
+            value={summary.activeCount}
+            icon="📋"
+            tone="indigo"
+            onClick={() => setActiveTab("all")}
+            active={activeTab === "all"}
+          />
+          <StatCard
+            label="Due Today"
+            value={tabCounts["due-today"]}
+            icon="📅"
+            tone="amber"
+            onClick={() => setActiveTab("due-today")}
+            active={activeTab === "due-today"}
+          />
+          <StatCard
+            label="Non-Visiting 7d+"
+            value={tabCounts["non-visiting"]}
+            icon="⚠️"
+            tone="red"
+            onClick={() => setActiveTab("non-visiting")}
+            active={activeTab === "non-visiting"}
+          />
+          <StatCard label="Completed Today" value={summary.completedToday} icon="✅" tone="emerald" />
         </div>
+
+        {/* ── Add Complaint (collapsible) ── */}
+        {formOpen && (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm animate-[popIn_0.15s_ease-out]">
+            <h2 className="mb-4 text-base font-semibold text-slate-800">Register Complaint</h2>
+            <form onSubmit={handleAddEntry} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Customer Name</label>
+                <input
+                  type="text"
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={handleFormChange}
+                  placeholder="e.g. Rahul Sharma"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Mobile Number</label>
+                <input
+                  type="tel"
+                  name="mobileNumber"
+                  value={form.mobileNumber}
+                  onChange={handleFormChange}
+                  placeholder="9876543210"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Product</label>
+                <select name="product" value={form.product} onChange={handleFormChange} className={inputCls}>
+                  {PRODUCTS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Who Will Go</label>
+                <select name="assignedTo" value={form.assignedTo} onChange={handleFormChange} className={inputCls}>
+                  {ASSIGNEES.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={form.address}
+                  onChange={handleFormChange}
+                  placeholder="Site / delivery address"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Follow-up Date</label>
+                <input
+                  type="date"
+                  name="followUpDate"
+                  value={form.followUpDate}
+                  onChange={handleFormChange}
+                  className={inputCls}
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Remark <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  name="remark"
+                  value={form.remark}
+                  onChange={handleFormChange}
+                  placeholder="Optional remark"
+                  className={inputCls}
+                />
+              </div>
+
+              <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Saving..." : "Save"}
+                </button>
+                <p className="text-xs text-slate-400">
+                  Will be registered as <span className="font-semibold text-slate-500">{actorName}</span>
+                </p>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* ── Complaints Table ── */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           {/* Header row */}
           <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold text-slate-800">Complaints</h2>
+              <h2 className="text-base font-semibold text-slate-800">Active Complaints</h2>
               <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
                 {tabbedEntries.length} shown
               </span>
             </div>
+            <button
+              onClick={handleExport}
+              disabled={tabbedEntries.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>⬇</span> Export CSV
+            </button>
           </div>
 
           {/* Tabs */}
@@ -751,7 +742,7 @@ export default function ComplaintManager() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px] text-left text-sm">
+            <table className="w-full min-w-[1050px] text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                   <th className="px-5 py-3">Name</th>
@@ -760,6 +751,7 @@ export default function ComplaintManager() {
                   <th className="px-5 py-3">Assigned To</th>
                   <th className="px-5 py-3">Follow-up Date</th>
                   <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Updated By</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -767,14 +759,14 @@ export default function ComplaintManager() {
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      <td colSpan={7} className="px-5 py-4">
+                      <td colSpan={8} className="px-5 py-4">
                         <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
                       </td>
                     </tr>
                   ))
                 ) : tabbedEntries.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
+                    <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
                       No complaints found.
                     </td>
                   </tr>
@@ -802,6 +794,12 @@ export default function ComplaintManager() {
                         <td className="px-5 py-3 text-slate-700">{formatDate(entry.followUpDate)}</td>
                         <td className="px-5 py-3">
                           <StatusBadge status={entry.status} nonVisiting={nonVisiting} />
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <Avatar name={lastActor(entry)} size={6} />
+                            {lastActor(entry)}
+                          </span>
                         </td>
                         <td className="px-5 py-3 text-right">
                           <button
@@ -897,6 +895,9 @@ export default function ComplaintManager() {
                 />
               </div>
             )}
+            <p className="text-xs text-slate-400">
+              This will be logged as done by <span className="font-semibold text-slate-500">{actorName}</span>
+            </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -1051,6 +1052,20 @@ export default function ComplaintManager() {
                     <p className="text-xs text-slate-400">Last Updated</p>
                     <p className="font-medium text-slate-700">{formatDateTime(d.lastUpdatedAt)}</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Registered By</p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-700">
+                      <Avatar name={d.registeredBy} size={5} />
+                      {d.registeredBy || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Last Updated By</p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-700">
+                      <Avatar name={lastActor(d)} size={5} />
+                      {lastActor(d)}
+                    </p>
+                  </div>
                 </div>
 
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">History</p>
@@ -1069,6 +1084,10 @@ export default function ComplaintManager() {
                           </div>
                           {h.remark && <p className="text-slate-600">{h.remark}</p>}
                           {h.followUpDate && <p className="mt-1 text-slate-400">Follow-up set for {formatDate(h.followUpDate)}</p>}
+                          <p className="mt-1.5 flex items-center gap-1 text-slate-400">
+                            <Avatar name={h.updatedBy} size={4} />
+                            Added by <span className="font-medium text-slate-500">{h.updatedBy || "Unknown User"}</span>
+                          </p>
                         </div>
                       ))
                   )}

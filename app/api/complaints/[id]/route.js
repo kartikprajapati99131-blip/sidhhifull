@@ -69,7 +69,7 @@ export async function PUT(request, { params }) {
 
     // ── Field edit ──
     if (body.isEdit) {
-      const { customerName, mobileNumber, address, product, assignedTo, followUpDate } = body;
+      const { customerName, mobileNumber, address, product, assignedTo, followUpDate, actorName } = body;
 
       if (!customerName?.trim() || !mobileNumber?.trim() || !address?.trim()) {
         return NextResponse.json(
@@ -113,6 +113,7 @@ export async function PUT(request, { params }) {
       complaint.assignedTo = assignedTo;
       complaint.followUpDate = new Date(followUpDate);
       complaint.lastUpdatedAt = new Date();
+      complaint.lastUpdatedBy = actorName?.trim() || "Unknown User";
 
       await complaint.save();
 
@@ -123,7 +124,8 @@ export async function PUT(request, { params }) {
     }
 
     // ── Status action ──
-    const { status, remark, followUpDate } = body;
+    const { status, remark, followUpDate, actorName } = body;
+    const actor = actorName?.trim() || "Unknown User";
 
     if (!STATUSES.includes(status)) {
       return NextResponse.json(
@@ -155,18 +157,22 @@ export async function PUT(request, { params }) {
       remark: trimmedRemark,
       followUpDate: newFollowUpDate,
       at: now,
+      updatedBy: actor,
     });
 
     complaint.status = status;
     complaint.remark = trimmedRemark;
     complaint.followUpDate = newFollowUpDate;
     complaint.lastUpdatedAt = now;
+    complaint.lastUpdatedBy = actor;
 
     if (status === "completed") {
       complaint.completedAt = now;
+      complaint.completedBy = actor;
       complaint.followUpDate = null;
     } else {
       complaint.completedAt = null;
+      complaint.completedBy = null;
     }
 
     await complaint.save();

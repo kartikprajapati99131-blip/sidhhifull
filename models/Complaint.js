@@ -17,6 +17,8 @@ const HistorySchema = new mongoose.Schema(
     remark: { type: String, default: "" },
     followUpDate: { type: Date, default: null },
     at: { type: Date, default: Date.now },
+    // Name of the person (from their login session) who made this update.
+    updatedBy: { type: String, default: "Unknown User", trim: true },
   },
   { _id: false }
 );
@@ -35,6 +37,13 @@ const ComplaintSchema = new mongoose.Schema(
 
     lastUpdatedAt: { type: Date, default: Date.now },
     completedAt: { type: Date, default: null },
+
+    // Who registered the complaint, and who most recently touched it —
+    // both taken from the logged-in user's session name, never typed in
+    // by hand, so the audit trail can't be spoofed by a stray text field.
+    registeredBy: { type: String, default: "Unknown User", trim: true },
+    lastUpdatedBy: { type: String, default: "Unknown User", trim: true },
+    completedBy: { type: String, default: null, trim: true },
 
     history: { type: [HistorySchema], default: [] },
   },

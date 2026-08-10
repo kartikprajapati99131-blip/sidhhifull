@@ -31,32 +31,49 @@ export async function GET() {
     const todayEnd = endOfDay(now);
     const sevenDaysAgo = new Date(now.getTime() - SEVEN_DAYS_MS);
 
-    const [todayUpdates, todayDue, last7DaysPending, nonVisiting] = await Promise.all([
-      Complaint.find({ lastUpdatedAt: { $gte: todayStart, $lte: todayEnd } })
-        .sort({ lastUpdatedAt: -1 })
-        .lean(),
-      Complaint.find({
-        status: { $ne: "completed" },
-        followUpDate: { $gte: todayStart, $lte: todayEnd },
-      })
-        .sort({ followUpDate: 1 })
-        .lean(),
-      Complaint.find({
-        status: { $ne: "completed" },
-        followUpDate: { $gte: sevenDaysAgo, $lt: todayStart },
-      })
-        .sort({ followUpDate: 1 })
-        .lean(),
-      Complaint.find({
-        status: { $ne: "completed" },
-        lastUpdatedAt: { $lte: sevenDaysAgo },
-      })
-        .sort({ lastUpdatedAt: 1 })
-        .lean(),
-    ]);
+    const [todayUpdates, todayDue, last7DaysPending, nonVisiting, activeCount, completedCount, completedToday] =
+      await Promise.all([
+        Complaint.find({ lastUpdatedAt: { $gte: todayStart, $lte: todayEnd } })
+          .sort({ lastUpdatedAt: -1 })
+          .lean(),
+        Complaint.find({
+          status: { $ne: "completed" },
+          followUpDate: { $gte: todayStart, $lte: todayEnd },
+        })
+          .sort({ followUpDate: 1 })
+          .lean(),
+        Complaint.find({
+          status: { $ne: "completed" },
+          followUpDate: { $gte: sevenDaysAgo, $lt: todayStart },
+        })
+          .sort({ followUpDate: 1 })
+          .lean(),
+        Complaint.find({
+          status: { $ne: "completed" },
+          lastUpdatedAt: { $lte: sevenDaysAgo },
+        })
+          .sort({ lastUpdatedAt: 1 })
+          .lean(),
+        // Lightweight counts for the dashboard stat cards — no need to pull
+        // full documents just to show a number.
+        Complaint.countDocuments({ status: { $ne: "completed" } }),
+        Complaint.countDocuments({ status: "completed" }),
+        Complaint.countDocuments({ status: "completed", completedAt: { $gte: todayStart, $lte: todayEnd } }),
+      ]);
 
     return NextResponse.json(
-      { success: true, data: { todayUpdates, todayDue, last7DaysPending, nonVisiting } },
+      {
+        success: true,
+        data: {
+          todayUpdates,
+          todayDue,
+          last7DaysPending,
+          nonVisiting,
+          activeCount,
+          completedCount,
+          completedToday,
+        },
+      },
       { status: 200 }
     );
   } catch (error) {
