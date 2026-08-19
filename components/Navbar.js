@@ -41,6 +41,7 @@ export default function Navbar() {
       title: "People",
       items: [
         { href: "/users", label: "All Users", dot: "bg-violet-500" },
+        { href: "/policies", label: "Policies", dot: "bg-rose-500" },
         { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
@@ -157,9 +158,9 @@ export default function Navbar() {
                     <DropPanel onClose={() => setSubAdminOpen(false)}>
                       {[
                         { href: "/customer", label: "Customer lead", dot: "bg-sky-500" },
+                        { href: "/policies", label: "Policies", dot: "bg-rose-500" },
                         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
                         { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
-
                         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
                         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
                         { href: "/due-payments", label: "Reminders", dot: "bg-sky-500" },
