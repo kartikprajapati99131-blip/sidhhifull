@@ -3,38 +3,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 
-// Roles that can see EVERY customer entry (not just their own).
 const CAN_SEE_ALL_ROLES = ["admin", "subadmin", "sales"];
-
-// Roles that can see EVERY mistry entry, added by anyone. Sales is
-// deliberately excluded: sales can see all customers, but only the Mistry
-// entries they personally created — same rule enforced server-side in
-// app/api/entries/route.js (CAN_SEE_ALL_MISTRY_ROLES).
 const CAN_SEE_ALL_MISTRY_ROLES = ["admin", "subadmin"];
-
-// Roles that can delete an entry. Sales can view/add/edit but NOT delete.
 const CAN_DELETE_ROLES = ["admin", "subadmin"];
-
-// Roles that can open the "Due" screen — entries due today or overdue by
-// up to NOT_VISITED_AFTER_DAYS days. Sales IS included.
-const DUE_VIEW_ROLES = ["admin", "subadmin", "sales"];
-
-// Roles that can open the "Overdue" screen — entries overdue by MORE than
-// NOT_VISITED_AFTER_DAYS days. This is now its own separate screen (not
-// nested inside Due), and sales IS included, same as Due.
-const OVERDUE_VIEW_ROLES = ["admin", "subadmin", "sales"];
-
-// Roles that can open "Today's Updates" (the activity log). Sales IS
-// included, but gets a personal-only version of the screen — see
-// restrictToUserId below — titled "My Updates" and showing only what that
-// sales person themselves logged.
+const DUE_VIEW_ROLES = ["admin", "subadmin", "sales","staff"];
+const OVERDUE_VIEW_ROLES = ["admin", "subadmin", "sales","staff"];
 const ACTIVITY_VIEW_ROLES = ["admin", "subadmin", "sales"];
-
-// Roles that can see the date-range filter and the "Added by" dropdown
-// filter on the main list. Sales is intentionally NOT in this list.
 const ADMIN_SUBADMIN_ROLES = ["admin", "subadmin"];
-
-// Customer success-ratio panel (reveals per-staff conversion rates) — admin only.
 const SUCCESS_RATIO_ROLES = ["admin"];
 
 const EMPTY_FORM = {
@@ -105,10 +80,6 @@ const TYPE_FILTERS = [
   { value: "mistry", label: "Mistry" },
 ];
 
-// Sittos / Magnus / CPL tags. Picked (multi-select) whenever a "Confirm
-// site" or "Mark visited" action is logged; the tag FILTER below picks one
-// at a time (same "All / X / Y / Z" pattern as the type toggle) and is
-// shared across every screen — exactly like TYPE_FILTERS.
 const VISIT_TAGS = ["Sittos", "Magnus", "CPL"];
 
 const TAG_FILTERS = [
@@ -116,10 +87,6 @@ const TAG_FILTERS = [
   ...VISIT_TAGS.map((t) => ({ value: t, label: t })),
 ];
 
-// Customer-only filter: does this customer have a Mistry and/or an
-// Architect on file? Choosing anything other than "All" implicitly narrows
-// the list to customer entries, since mistry-type entries never carry
-// these fields.
 const REFERRAL_FILTERS = [
   { value: "all", label: "All" },
   { value: "mistry", label: "Has Mistry" },
@@ -129,10 +96,7 @@ const REFERRAL_FILTERS = [
 const hasMistryInfo = (e) => Boolean(e.mistryName?.trim() || e.mistryNumber?.trim());
 const hasArchitectInfo = (e) => Boolean(e.architectName?.trim() || e.architectNumber?.trim());
 
-// The full, current set of tags for an entry. Prefers the entry's own
-// `tags` field (set by the backend), but if that ever comes back empty —
-// e.g. an older API response — falls back to rebuilding it from the
-// history itself (every "site-confirm" / "visited" action's tags, unioned).
+
 function getEntryTags(entry) {
   if (entry?.tags?.length) return entry.tags;
   const set = new Set();
