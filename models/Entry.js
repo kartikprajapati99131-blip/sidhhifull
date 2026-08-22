@@ -5,6 +5,12 @@ import mongoose from "mongoose";
 // action route both validate against the same list.
 export const VISIT_TAGS = ["Sittos", "Magnus", "CPL"];
 
+// Fixed set of referrers for the "Referenced By" customer field. Unlike
+// Route (admin-managed, dynamic master data), these values are decided
+// and fixed — not editable through the app. Kept in one place so the
+// schema and the API routes validate against the same list.
+export const REFERENCED_BY_OPTIONS = ["Haresh bhai", "Sanjay bhai"];
+
 const ActorSchema = new mongoose.Schema(
   {
     id: { type: String, required: true },
@@ -47,6 +53,18 @@ const EntrySchema = new mongoose.Schema(
     architectName: { type: String, default: "" },
     architectNumber: { type: String, default: "" },
 
+    // Customer-only. References a Route master document (see
+    // models/Route.js). Optional — existing entries created before this
+    // field existed simply have route: null, which the UI renders as
+    // "No route" instead of treating the record as invalid.
+    route: { type: mongoose.Schema.Types.ObjectId, ref: "Route", default: null },
+
+    // Customer-only. Fixed list (see REFERENCED_BY_OPTIONS above), not
+    // admin-managed. "" (default) means "not set" — same convention as
+    // the other optional customer-only string fields above — so existing
+    // entries created before this field existed don't need a migration.
+    referencedBy: { type: String, enum: [...REFERENCED_BY_OPTIONS, ""], default: "" },
+
     status: {
       type: String,
       enum: ["pending", "site-confirmed", "cancelled"],
@@ -70,6 +88,11 @@ EntrySchema.index({ "createdBy.id": 1 });
 EntrySchema.index({ status: 1, nextMeetingDate: 1 });
 EntrySchema.index({ mobile1: 1 });
 EntrySchema.index({ tags: 1 });
+// Powers the Route filter and the "is this route in use" check that runs
+// before a route can be deleted.
+EntrySchema.index({ route: 1 });
+// Powers the Referenced By filter.
+EntrySchema.index({ referencedBy: 1 });
 
 // ── Dev-mode cache buster ───────────────────────────────────────────────
 // Next.js dev servers hot-reload most files, but `mongoose.models.Entry`

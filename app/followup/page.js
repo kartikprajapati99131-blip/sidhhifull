@@ -11,6 +11,20 @@ const OVERDUE_VIEW_ROLES = ["admin", "subadmin", "sales","staff"];
 const ACTIVITY_VIEW_ROLES = ["admin", "subadmin", "sales"];
 const ADMIN_SUBADMIN_ROLES = ["admin", "subadmin"];
 const SUCCESS_RATIO_ROLES = ["admin"];
+// Route Management (add/delete routes) is an admin-only function, same
+// pattern as SUCCESS_RATIO_ROLES above. Every role that can reach this
+// page can still READ the route list (for the dropdown/filter) — this
+// constant only gates the management screen and its mutations.
+const ROUTE_MANAGE_ROLES = ["admin"];
+
+// Referenced By — fixed list, not admin-managed like Route. Keep this in
+// sync with REFERENCED_BY_OPTIONS in models/Entry.js.
+const REFERENCED_BY_OPTIONS = ["Haresh bhai", "Sanjay bhai"];
+const REFERENCED_BY_SELECT_OPTIONS = REFERENCED_BY_OPTIONS.map((v) => ({ value: v, label: v }));
+const REFERENCED_BY_FILTERS = [
+  { value: "all", label: "All" },
+  ...REFERENCED_BY_SELECT_OPTIONS,
+];
 
 const EMPTY_FORM = {
   mobile1: "",
@@ -23,6 +37,8 @@ const EMPTY_FORM = {
   mistryNumber: "",
   architectName: "",
   architectNumber: "",
+  route: "",
+  referencedBy: "",
   nextMeetingDate: "",
   remark: "",
 };
@@ -32,6 +48,14 @@ const CUSTOMER_FIELDS = [
   { name: "mobile2", label: "Mobile No 2", type: "tel", half: true },
   { name: "name", label: "Customer Name", required: true, half: true },
   { name: "profession", label: "Profession", half: true },
+  // Options are supplied at render time (see the `options` prop passed to
+  // <Field>) since routes are dynamic, admin-managed data loaded from
+  // /api/routes rather than a static list.
+  { name: "route", label: "Route", type: "select", half: true },
+  // Fixed options (REFERENCED_BY_SELECT_OPTIONS), unlike Route's dynamic
+  // admin-managed list — still passed in at render time via the `options`
+  // prop for consistency with how Field renders every "select" field.
+  { name: "referencedBy", label: "Referenced By", type: "select", half: true },
   { name: "siteAddress", label: "Site Address", textarea: true },
   { name: "permanentAddress", label: "Permanent Address", textarea: true },
   { name: "mistryName", label: "Mistry Name", half: true },
@@ -550,7 +574,11 @@ function CallLink({ number, className }) {
   );
 }
 
-function Field({ field, value, onChange }) {
+// `options` (array of { value, label }) is only relevant for `type:
+// "select"` fields such as Route, whose choices are dynamic/admin-managed
+// data rather than something that can live in the static field
+// definition — so it's passed in by the caller instead of on `field`.
+function Field({ field, value, onChange, options }) {
   const common = {
     id: field.name,
     name: field.name,
@@ -559,7 +587,6 @@ function Field({ field, value, onChange }) {
     required: !!field.required,
     className:
       "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500",
-    placeholder: field.label,
   };
   return (
     <div className={field.half ? "sm:col-span-1" : "sm:col-span-2"}>
@@ -567,7 +594,18 @@ function Field({ field, value, onChange }) {
         {field.label}
         {field.required && <span className="text-rose-500"> *</span>}
       </label>
-      {field.textarea ? <textarea rows={2} {...common} /> : <input type={field.type || "text"} {...common} />}
+      {field.type === "select" ? (
+        <select {...common}>
+          <option value="">{field.placeholder || `Select ${field.label}`}</option>
+          {(options || []).map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      ) : field.textarea ? (
+        <textarea rows={2} {...common} placeholder={field.label} />
+      ) : (
+        <input type={field.type || "text"} {...common} placeholder={field.label} />
+      )}
     </div>
   );
 }
@@ -685,6 +723,8 @@ function DetailModal({ entry, onClose }) {
           {isCustomer && (
             <>
               <DetailRow label="Profession" value={entry.profession} />
+              <DetailRow label="Route" value={entry.routeName} />
+              <DetailRow label="Referenced By" value={entry.referencedBy} />
               <div className="sm:col-span-2"><DetailRow label="Site Address" value={entry.siteAddress} /></div>
               <div className="sm:col-span-2"><DetailRow label="Permanent Address" value={entry.permanentAddress} /></div>
               <DetailRow label="Mistry Name" value={entry.mistryName} />
@@ -762,6 +802,18 @@ function EntryCard({ entry, canDelete, onAction, onEdit, onDelete, onOpenDetail 
                 {entry.nextMeetingDate === todayStr() ? "Due today" : "Overdue"}
               </span>
             )}
+          </div>
+        )}
+        {entry.type === "customer" && entry.routeName && (
+          <div className="flex items-center gap-1.5">
+            <dt className="font-medium text-slate-500">Route:</dt>
+            <dd><span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">{entry.routeName}</span></dd>
+          </div>
+        )}
+        {entry.type === "customer" && entry.referencedBy && (
+          <div className="flex items-center gap-1.5">
+            <dt className="font-medium text-slate-500">Referenced By:</dt>
+            <dd><span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">{entry.referencedBy}</span></dd>
           </div>
         )}
         {entry.type === "customer" && (hasMistryInfo(entry) || hasArchitectInfo(entry)) && (
@@ -937,6 +989,182 @@ function EntryScreen({
   );
 }
 
+// Admin-only Route Management screen: add/delete routes, with a live
+// per-route customer count and a delete-safety confirmation. Reachable
+// only when canManageRoutes (ROUTE_MANAGE_ROLES) — the API independently
+// enforces the same admin-only rule (see app/api/routes/route.js), so
+// hiding this button/view is a UX nicety, not the security boundary.
+function RouteManagementView({ routes, entries, routesLoading, onBack, showToast, refreshRoutes }) {
+  const [newRouteName, setNewRouteName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name, customerCount }
+  const [deleting, setDeleting] = useState(false);
+
+  // Alphabetical (A → Z), each with a live count of customers currently
+  // assigned to it — computed from the already-loaded `entries`, so this
+  // doesn't need its own API call.
+  const routeRows = useMemo(() => {
+    const counts = new Map();
+    for (const e of entries) {
+      if (e.type === "customer" && e.route) {
+        counts.set(e.route, (counts.get(e.route) || 0) + 1);
+      }
+    }
+    return [...routes]
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+      .map((r) => ({ ...r, customerCount: counts.get(r.id) || 0 }));
+  }, [routes, entries]);
+
+  const handleAddRoute = async (e) => {
+    e.preventDefault();
+    const name = newRouteName.trim();
+    if (!name) {
+      showToast("Route name is required", "error");
+      return;
+    }
+    setAdding(true);
+    try {
+      const res = await fetch("/api/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Route added successfully");
+        setNewRouteName("");
+        await refreshRoutes();
+      } else {
+        showToast(data.message || "Failed to add route", "error");
+      }
+    } catch {
+      showToast("Something went wrong while adding the route", "error");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDeleteRoute = async () => {
+    if (!deleteTarget || deleteTarget.customerCount > 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/routes?id=${deleteTarget.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Route deleted successfully");
+        setDeleteTarget(null);
+        await refreshRoutes();
+      } else {
+        showToast(data.message || "Failed to delete route", "error");
+      }
+    } catch {
+      showToast("Something went wrong while deleting the route", "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          Back to entries
+        </button>
+        <h2 className="text-base font-semibold text-slate-800">Route Management</h2>
+        <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">{routeRows.length} routes</span>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800">Add Route</h3>
+        <form onSubmit={handleAddRoute} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label htmlFor="new-route-name" className="mb-1 block text-xs font-medium text-slate-600">Route name</label>
+            <input
+              id="new-route-name"
+              type="text"
+              value={newRouteName}
+              onChange={(e) => setNewRouteName(e.target.value)}
+              maxLength={100}
+              placeholder="e.g. Deesa Highway"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={adding || !newRouteName.trim()}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+          >
+            {adding ? "Adding…" : "+ Add Route"}
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-800">Existing Routes</h3>
+        </div>
+        {routesLoading ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading routes…</p>
+        ) : routeRows.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-400">No routes yet. Add one above to get started.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-5 py-3">Route</th>
+                  <th className="px-5 py-3 text-right">Customers</th>
+                  <th className="px-5 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {routeRows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-5 py-3 font-medium text-slate-800">{r.name}</td>
+                    <td className="px-5 py-3 text-right text-slate-600">{r.customerCount}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button onClick={() => setDeleteTarget(r)} className="text-xs font-medium text-rose-600 hover:text-rose-800">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-800">Delete "{deleteTarget.name}"?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {deleteTarget.customerCount > 0
+                ? `This route is currently assigned to ${deleteTarget.customerCount} customer${deleteTarget.customerCount === 1 ? "" : "s"}. Please reassign ${deleteTarget.customerCount === 1 ? "that customer" : "those customers"} before deleting it.`
+                : "This can't be undone."}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60">Cancel</button>
+              <button
+                onClick={handleDeleteRoute}
+                disabled={deleting || deleteTarget.customerCount > 0}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+              >
+                {deleting ? "Deleting…" : "Delete route"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EntryManager() {
   const { data: session } = useSession();
   const currentUser = {
@@ -969,11 +1197,22 @@ export default function EntryManager() {
   // dropdown filter on the main list. Sales is deliberately excluded here.
   const canSeeStats = ADMIN_SUBADMIN_ROLES.includes(currentUser.role);
   const canSeeSuccessRatio = SUCCESS_RATIO_ROLES.includes(currentUser.role);
+  // canManageRoutes = allowed to open Route Management and add/delete
+  // routes. Everyone who can reach this page can still READ the route
+  // list (needed for the dropdown/filter) — this only gates the
+  // management screen itself, mirroring canSeeSuccessRatio above.
+  const canManageRoutes = ROUTE_MANAGE_ROLES.includes(currentUser.role);
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // Route master data — fetched once and cached in state (not refetched
+  // on every filter change). Used for the Add/Edit Customer dropdown, the
+  // Route filter, and the admin Route Management screen.
+  const [routes, setRoutes] = useState([]);
+  const [routesLoading, setRoutesLoading] = useState(true);
 
   const [entryType, setEntryType] = useState("customer");
   const [form, setForm] = useState(EMPTY_FORM);
@@ -996,6 +1235,16 @@ export default function EntryManager() {
   const [typeFilter, setTypeFilter] = useState("all"); // "all" | "customer" | "mistry" — shared everywhere
   const [tagFilter, setTagFilter] = useState("all"); // "all" | "Sittos" | "Magnus" | "CPL" — shared everywhere
   const [referralFilter, setReferralFilter] = useState("all"); // "all" | "mistry" | "architect" — customer-only, main list
+  // Route — customer-only, "all" shows every entry unaffected (Mistry
+  // included); a specific route id narrows the list to just the Customer
+  // entries assigned to that route. Shared through baseFilteredEntries so
+  // it also narrows Due / Overdue / Completed / Cancelled / Today's Updates.
+  const [routeFilter, setRouteFilter] = useState("all"); // "all" | route id
+  // Referenced By — customer-only, same "all leaves everything unaffected,
+  // specific value narrows to matching Customer entries only" behaviour as
+  // routeFilter above, and shared through baseFilteredEntries for the same
+  // reason (so it also narrows Due / Overdue / Completed / Cancelled).
+  const [referencedByFilter, setReferencedByFilter] = useState("all"); // "all" | one of REFERENCED_BY_OPTIONS
   // "Added by" — admin/subadmin only. Shortlists EITHER customer or mistry
   // entries down to a single staff member's additions. Shared through
   // baseFilteredEntries so it also narrows Due / Overdue / Completed /
@@ -1033,9 +1282,44 @@ export default function EntryManager() {
     }
   }, [showToast]);
 
+  // Route master data — fetched once on mount, independent of entries, and
+  // cached in state rather than re-fetched on every filter change (see
+  // `routes` state above). If this fails, the rest of the page must keep
+  // working: existing entries, their (already-known) route names from
+  // /api/entries, and every other filter all still function — only the
+  // dropdown/filter options are affected, so we swallow the error into a
+  // quiet toast instead of blocking anything.
+  const fetchRoutes = useCallback(async () => {
+    setRoutesLoading(true);
+    try {
+      const res = await fetch("/api/routes");
+      const data = await res.json();
+      if (data.success) {
+        setRoutes(data.data);
+      } else {
+        showToast(data.message || "Failed to load routes", "error");
+      }
+    } catch {
+      showToast("Something went wrong while loading routes", "error");
+    } finally {
+      setRoutesLoading(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
     fetchEntries();
-  }, [fetchEntries]);
+    fetchRoutes();
+  }, [fetchEntries, fetchRoutes]);
+
+  // Alphabetical (A → Z) route options, shared by the Add/Edit Customer
+  // dropdown and the Route filter.
+  const routeOptions = useMemo(
+    () =>
+      [...routes]
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+        .map((r) => ({ value: r.id, label: r.name })),
+    [routes]
+  );
 
   // If a role ends up on a gated view it isn't allowed to see — e.g. role
   // changes mid-session, stale state — bounce straight back to the normal
@@ -1044,7 +1328,8 @@ export default function EntryManager() {
     if (view === "due" && !canSeeDue) setView("list");
     if (view === "overdue" && !canSeeOverdue) setView("list");
     if (view === "activity" && !canSeeActivity) setView("list");
-  }, [view, canSeeDue, canSeeOverdue, canSeeActivity]);
+    if (view === "routes" && !canManageRoutes) setView("list");
+  }, [view, canSeeDue, canSeeOverdue, canSeeActivity, canManageRoutes]);
 
   // Base pipeline shared by the main list, Due, Overdue, Completed,
   // Cancelled, and (indirectly, via its own props) Today's Updates: entry
@@ -1055,7 +1340,20 @@ export default function EntryManager() {
       entries.filter((e) => {
         if (typeFilter !== "all" && e.type !== typeFilter) return false;
         if (tagFilter !== "all" && !getEntryTags(e).includes(tagFilter)) return false;
-       
+        // Route is a Customer-only field. "all" leaves every entry
+        // (Customer and Mistry alike) exactly as-is; a specific route
+        // narrows down to matching Customer entries only — Mistry entries
+        // never match a route filter since routes don't apply to them.
+        if (routeFilter !== "all") {
+          if (e.type !== "customer") return false;
+          if ((e.route || "") !== routeFilter) return false;
+        }
+        // Referenced By — same Customer-only narrowing behaviour as Route
+        // above.
+        if (referencedByFilter !== "all") {
+          if (e.type !== "customer") return false;
+          if ((e.referencedBy || "") !== referencedByFilter) return false;
+        }
         if (
           e.type === "mistry" &&
           !canSeeAllMistry &&
@@ -1069,7 +1367,17 @@ export default function EntryManager() {
         if (addedByFilter !== "all" && e.createdBy?.id !== addedByFilter) return false;
         return true;
       }),
-    [entries, typeFilter, tagFilter, canSeeAllMistry, currentUser.id, currentUser.role, addedByFilter]
+    [
+      entries,
+      typeFilter,
+      tagFilter,
+      routeFilter,
+      referencedByFilter,
+      canSeeAllMistry,
+      currentUser.id,
+      currentUser.role,
+      addedByFilter,
+    ]
   );
 
   const dueEntries = useMemo(() => baseFilteredEntries.filter(isDueOrOverdue), [baseFilteredEntries]);
@@ -1143,6 +1451,8 @@ export default function EntryManager() {
     typeFilter !== "all" ||
     tagFilter !== "all" ||
     referralFilter !== "all" ||
+    routeFilter !== "all" ||
+    referencedByFilter !== "all" ||
     addedByFilter !== "all" ||
     hasDateFilter;
 
@@ -1151,6 +1461,8 @@ export default function EntryManager() {
     setTypeFilter("all");
     setTagFilter("all");
     setReferralFilter("all");
+    setRouteFilter("all");
+    setReferencedByFilter("all");
     setAddedByFilter("all");
     setFromDate("");
     setToDate("");
@@ -1229,6 +1541,8 @@ export default function EntryManager() {
       mistryNumber: entry.mistryNumber || "",
       architectName: entry.architectName || "",
       architectNumber: entry.architectNumber || "",
+      route: entry.route || "",
+      referencedBy: entry.referencedBy || "",
       nextMeetingDate: entry.nextMeetingDate || "",
       remark: "",
     });
@@ -1361,7 +1675,13 @@ export default function EntryManager() {
             <h3 className="mb-4 text-base font-semibold text-slate-800">Edit {editEntryType === "customer" ? "Customer" : "Mistry"}</h3>
             <form onSubmit={handleEditSave} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {editFields.map((f) => (
-                <Field key={f.name} field={f} value={editForm[f.name]} onChange={(name, value) => setEditForm((p) => ({ ...p, [name]: value }))} />
+                <Field
+                  key={f.name}
+                  field={f}
+                  value={editForm[f.name]}
+                  onChange={(name, value) => setEditForm((p) => ({ ...p, [name]: value }))}
+                  options={f.name === "route" ? routeOptions : f.name === "referencedBy" ? REFERENCED_BY_SELECT_OPTIONS : undefined}
+                />
               ))}
               <div className="sm:col-span-1">
                 <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
@@ -1492,6 +1812,26 @@ export default function EntryManager() {
           onBack={() => setView("list")}
           onOpenDetail={(id) => setDetailEntryId(id)}
           restrictToUserId={currentUser.role === "sales" ? currentUser.id : null}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Dedicated "Route Management" screen — admin only. Add/delete
+  // routes; deletion is blocked (both here and server-side) while any
+  // customer entries still reference the route. ─────────────────────────
+  if (view === "routes" && canManageRoutes) {
+    return (
+      <div className="space-y-4">
+        <Toast toast={toast} />
+        <RouteManagementView
+          routes={routes}
+          entries={entries}
+          routesLoading={routesLoading}
+          onBack={() => setView("list")}
+          showToast={showToast}
+          refreshRoutes={fetchRoutes}
         />
         {modals}
       </div>
@@ -1634,6 +1974,15 @@ export default function EntryManager() {
             : "viewing your entries only"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Route Management: admin only. */}
+          {canManageRoutes && (
+            <button
+              onClick={() => setView("routes")}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Manage Routes
+            </button>
+          )}
           {/* Today's Updates / My Updates: admin, subadmin, and sales. Sales
               gets its own personal-activity-only version of this screen. */}
           {canSeeActivity && (
@@ -1701,7 +2050,13 @@ export default function EntryManager() {
 
           <form onSubmit={handleAddEntry} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {fields.map((f) => (
-              <Field key={f.name} field={f} value={form[f.name]} onChange={updateField} />
+              <Field
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={updateField}
+                options={f.name === "route" ? routeOptions : f.name === "referencedBy" ? REFERENCED_BY_SELECT_OPTIONS : undefined}
+              />
             ))}
             <div className="sm:col-span-1">
               <label className="mb-1 block text-xs font-medium text-slate-600">Next meeting date</label>
@@ -1745,7 +2100,7 @@ export default function EntryManager() {
           <label className="text-xs font-medium text-slate-600">Tag</label>
           <FilterToggle options={TAG_FILTERS} value={tagFilter} onChange={setTagFilter} />
         </div>
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${canSeeStats ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">Search</label>
             <div className="relative">
@@ -1769,6 +2124,31 @@ export default function EntryManager() {
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             >
               {REFERRAL_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Route</label>
+            <select
+              value={routeFilter}
+              onChange={(e) => setRouteFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="all">All Routes</option>
+              {routeOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Referenced By</label>
+            <select
+              value={referencedByFilter}
+              onChange={(e) => setReferencedByFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              {REFERENCED_BY_FILTERS.map((f) => (
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </select>
@@ -1886,6 +2266,7 @@ export default function EntryManager() {
                     <th className="px-5 py-3">Mobile</th>
                     <th className="px-5 py-3">Next meeting</th>
                     <th className="px-5 py-3">Status</th>
+                    <th className="hidden px-5 py-3 md:table-cell">Route</th>
                     <th className="hidden px-5 py-3 lg:table-cell">Added by</th>
                     <th className="px-5 py-3 text-right">Actions</th>
                   </tr>
@@ -1919,6 +2300,7 @@ export default function EntryManager() {
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[entry.status]}`}>{entry.status}</span>
                       </td>
+                      <td className="hidden px-5 py-3 text-slate-600 md:table-cell">{entry.type === "customer" ? (entry.routeName || <span className="text-slate-400">—</span>) : <span className="text-slate-400">—</span>}</td>
                       <td className="hidden px-5 py-3 text-slate-600 lg:table-cell">{entry.createdBy?.name} <span className="text-slate-400">({entry.createdBy?.role})</span></td>
                       <td className="px-5 py-3 text-right">
                         <ActionMenu entry={entry} canDelete={canDelete} onAction={openActionModal} onEdit={openEditModal} onDelete={setDeleteTarget} />

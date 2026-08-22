@@ -1,11 +1,31 @@
 // app/api/entries/route.js
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import mongoose from "mongoose";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 import dbConnect from "@/db/connectDb";
-import Entry from "@/models/Entry";
+import Entry, { REFERENCED_BY_OPTIONS } from "@/models/Entry";
+// eslint-disable-next-line no-unused-vars -- needed so mongoose has the
+// "Route" model registered before Entry.find(...).populate("route") runs.
+import Route from "@/models/Route";
 import { serializeEntry } from "@/lib/serializeEntry";
+
+// Wraps the project's existing serializeEntry() with the route fields
+// (`route`, `routeName`) and the `referencedBy` field the frontend needs.
+// Works whether `doc.route` is a populated { _id, name } sub-document or a
+// plain, unpopulated ObjectId — so it's safe to reuse anywhere an Entry
+// doc is serialized, populated or not. `referencedBy` is explicitly
+// re-applied here (not just left to serializeEntry's base spread) so it's
+// guaranteed present regardless of what that helper does or doesn't pass
+// through.
+export function serializeEntryWithRoute(doc) {
+  const base = serializeEntry(doc);
+  const route = doc.route;
+  const routeId = route && route._id ? route._id.toString() : route ? route.toString() : null;
+  const routeName = route && route.name ? route.name : null;
+  return { ...base, route: routeId, routeName, referencedBy: doc.referencedBy || "" };
+}
 
 // Roles allowed to see every CUSTOMER entry, not just their own — keep
 // this in sync with app/entries/followup/page.js and the [id] routes.
@@ -97,10 +117,10 @@ export async function GET() {
       filter = { "createdBy.id": session.user.id };
     }
 
-    const docs = await Entry.find(filter).sort({ createdAt: -1 });
+    const docs = await Entry.find(filter).sort({ createdAt: -1 }).populate("route", "name");
 
     return NextResponse.json(
-      { success: true, data: docs.map(serializeEntry) },
+      { success: true, data: docs.map(serializeEntryWithRoute) },
       { status: 200 }
     );
   } catch (error) {
@@ -139,6 +159,27 @@ export async function POST(req) {
     const mobile1 = body.mobile1.trim();
     const mobile2 = body.mobile2?.trim() || "";
 
+    // Route is customer-only and optional. An empty string / undefined /
+    // null all mean "no route assigned" — only validate when something
+    // was actually sent.
+    let route = null;
+    if (body.type === "customer" && body.route) {
+      if (!mongoose.Types.ObjectId.isValid(body.route)) {
+        return NextResponse.json({ success: false, message: "Invalid route" }, { status: 400 });
+      }
+      route = body.route;
+    }
+
+    // Referenced By is customer-only and optional, restricted to the
+    // fixed REFERENCED_BY_OPTIONS list (see models/Entry.js).
+    let referencedBy = "";
+    if (body.type === "customer" && body.referencedBy) {
+      if (!REFERENCED_BY_OPTIONS.includes(body.referencedBy)) {
+        return NextResponse.json({ success: false, message: "Invalid Referenced By value" }, { status: 400 });
+      }
+      referencedBy = body.referencedBy;
+    }
+
     if (!body.force) {
       const existingPending = await Entry.findOne({
         status: "pending",
@@ -154,7 +195,7 @@ export async function POST(req) {
             success: false,
             duplicate: true,
             message: `A pending entry already exists for this mobile number (${existingPending.name}). Save anyway?`,
-            existingEntry: serializeEntry(existingPending),
+            existingEntry: serializeEntryWithRoute(existingPending),
           },
           { status: 409 }
         );
@@ -179,6 +220,8 @@ export async function POST(req) {
       mistryNumber: body.mistryNumber,
       architectName: body.architectName,
       architectNumber: body.architectNumber,
+      route,
+      referencedBy,
       nextMeetingDate: body.nextMeetingDate,
       status: "pending",
       createdBy: actor,
@@ -187,8 +230,12 @@ export async function POST(req) {
         : [],
     });
 
+    if (doc.route) {
+      await doc.populate("route", "name");
+    }
+
     return NextResponse.json(
-      { success: true, message: "Entry created successfully", data: serializeEntry(doc) },
+      { success: true, message: "Entry created successfully", data: serializeEntryWithRoute(doc) },
       { status: 201 }
     );
   } catch (error) {

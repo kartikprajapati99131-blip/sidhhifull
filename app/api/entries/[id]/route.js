@@ -5,9 +5,9 @@ import mongoose from "mongoose";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ⚠️ adjust to your actual authOptions export path
 
 import dbConnect from "@/db/connectDb";
-import Entry from "@/models/Entry";
-import { serializeEntry } from "@/lib/serializeEntry";
-import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES, CAN_DELETE_ROLES } from "../route";
+import Entry, { REFERENCED_BY_OPTIONS } from "@/models/Entry";
+import Route from "@/models/Route";
+import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES, CAN_DELETE_ROLES, serializeEntryWithRoute } from "../route";
 
 const EDITABLE_FIELDS = [
   "mobile1",
@@ -69,7 +69,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: "Invalid entry ID" }, { status: 400 });
     }
 
-    const entry = await Entry.findById(id);
+    const entry = await Entry.findById(id).populate("route", "name");
     if (!entry) {
       return NextResponse.json({ success: false, message: "Entry not found" }, { status: 404 });
     }
@@ -77,7 +77,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, data: serializeEntry(entry) }, { status: 200 });
+    return NextResponse.json({ success: true, data: serializeEntryWithRoute(entry) }, { status: 200 });
   } catch (error) {
     console.error("Error fetching entry:", error);
     return NextResponse.json(
@@ -137,6 +137,45 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // Route is handled separately from EDITABLE_FIELDS because it's a
+    // reference (ObjectId), not a plain string: it needs its own
+    // validation and a name lookup so the change-history line reads like
+    // "Route: "Deesa Highway" → "Abu Highway"" instead of showing raw IDs.
+    // An empty string / null clears the route.
+    if (body.route !== undefined) {
+      let newRouteId = null;
+      if (body.route) {
+        if (!mongoose.Types.ObjectId.isValid(body.route)) {
+          return NextResponse.json({ success: false, message: "Invalid route" }, { status: 400 });
+        }
+        newRouteId = body.route;
+      }
+      const oldRouteId = entry.route ? entry.route.toString() : null;
+      if (newRouteId !== oldRouteId) {
+        const [oldRouteDoc, newRouteDoc] = await Promise.all([
+          oldRouteId ? Route.findById(oldRouteId).select("name") : null,
+          newRouteId ? Route.findById(newRouteId).select("name") : null,
+        ]);
+        changeLines.push(`Route: "${oldRouteDoc?.name || "—"}" → "${newRouteDoc?.name || "—"}"`);
+        entry.route = newRouteId;
+      }
+    }
+
+    // Referenced By — handled separately from EDITABLE_FIELDS (like
+    // Route) because it's restricted to the fixed REFERENCED_BY_OPTIONS
+    // list and needs its own validation rather than a free-text trim.
+    if (body.referencedBy !== undefined) {
+      const newValue = body.referencedBy?.trim() || "";
+      if (newValue && !REFERENCED_BY_OPTIONS.includes(newValue)) {
+        return NextResponse.json({ success: false, message: "Invalid Referenced By value" }, { status: 400 });
+      }
+      const oldValue = entry.referencedBy || "";
+      if (newValue !== oldValue) {
+        changeLines.push(`Referenced By: "${oldValue || "—"}" → "${newValue || "—"}"`);
+        entry.referencedBy = newValue;
+      }
+    }
+
     const changed = changeLines.length > 0;
     if (changed) {
       entry.history.push({
@@ -149,9 +188,12 @@ export async function PUT(request, { params }) {
     }
 
     await entry.save();
+    if (entry.route) {
+      await entry.populate("route", "name");
+    }
 
     return NextResponse.json(
-      { success: true, message: "Entry updated successfully", data: serializeEntry(entry) },
+      { success: true, message: "Entry updated successfully", data: serializeEntryWithRoute(entry) },
       { status: 200 }
     );
   } catch (error) {

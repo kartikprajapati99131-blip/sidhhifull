@@ -5,8 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ⚠️ adju
 
 import dbConnect from "@/db/connectDb";
 import Entry, { VISIT_TAGS } from "@/models/Entry";
-import { serializeEntry } from "@/lib/serializeEntry";
-import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES } from "../../route";
+import { CAN_SEE_ALL_ROLES, CAN_SEE_ALL_MISTRY_ROLES, serializeEntryWithRoute } from "../../route";
 
 // "visited" is a new action: log a site visit with a remark and an
 // optional Sittos/Magnus/CPL tag selection, without changing status.
@@ -104,9 +103,12 @@ export async function POST(request, { params }) {
     }
 
     await entry.save();
+    if (entry.route) {
+      await entry.populate("route", "name");
+    }
 
     return NextResponse.json(
-      { success: true, message: "Entry updated successfully", data: serializeEntry(entry) },
+      { success: true, message: "Entry updated successfully", data: serializeEntryWithRoute(entry) },
       { status: 200 }
     );
   } catch (error) {
