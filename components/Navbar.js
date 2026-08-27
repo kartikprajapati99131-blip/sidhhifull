@@ -328,6 +328,8 @@ export default function Navbar() {
                     <DropPanel onClose={() => setStaffOpen(false)}>
                       {[
                         { href: "/add-customer", label: "Add Customer Data", dot: "bg-sky-500" },
+                        { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
+
                         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
                       ].map((it) => (
                         <DropLink key={it.href} {...it} close={() => setStaffOpen(false)} />
