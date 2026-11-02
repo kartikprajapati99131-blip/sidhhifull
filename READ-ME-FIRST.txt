@@ -1,0 +1,23 @@
+HOW TO ADD THE PDF FEATURE TO YOUR PROJECT (sidhhifull)
+
+1. Copy every folder from this zip into your project root and say "Yes" to merge.
+   All files are NEW except components/Navbar.js (it only gets 2 extra menu lines:
+   "PDF Documents" for admin and subadmin). If you changed Navbar.js since you sent
+   me the project, do NOT overwrite it. Just add this line next to your Policies link
+   in the admin list and the subadmin list:
+       { href: "/documents/manage", label: "PDF Documents", dot: "bg-rose-500" },
+
+2. No new npm packages and no new .env values are needed.
+   (It uses your existing MONGODB_URI, next-auth login and lucide-react.)
+
+3. npm run dev, then:
+   - Admin / subadmin upload page:  /documents/manage
+   - Public page for clients:       /documents
+
+Where files are saved: in your MongoDB database
+   collection "pdfdocuments"  = title, description, size, published, downloads
+   collection "pdfchunks"     = the PDF bytes, in pieces under 1 MB each
+Nothing is written to the server disk or to Cloudinary.
+
+Who can upload: roles in lib/pdfAuth.js  ->  PDF_MANAGER_ROLES = ["admin", "subadmin"]
+Max size: lib/pdfConfig.js -> MAX_PDF_BYTES (50 MB)

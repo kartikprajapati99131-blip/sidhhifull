@@ -123,6 +123,7 @@ export default function RippleNavbar() {
     { name: "About", href: "about" },
     { name: "Shop", href: "shop" },
     { name: "Projects", href: "projects" },
+    { name: "Catalogs", href: "documents" },
     // { name: "Orders", href: "yourorders" },
     { name: "Contact", href: "contact" },
   ];

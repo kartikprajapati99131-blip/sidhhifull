@@ -20,6 +20,7 @@ const Main = () => {
                                     { name: "UPVC", role: "Windows", src: "/Product/upvc.png", href: "/shop?type=UPVC" },
                                     { name: "Hardware", role: "Hardware", src: "/Product/hardware.jpg", href: "/shop?type=Hardware" },
                                     { name: "Aluminium Section", role: "Shutters & Windows", src: "/Product/Aluminium.jpg", href: "/shop?type=AluminiumSection" },
+
                                 ].map((member, i) => (
                                     <Link key={i} href={member.href}>
                                         <div className=' bg-gray-100 text-center backdrop-blur-md shadow-lg rounded-2xl p-4 hover:scale-105 transition w-full'>

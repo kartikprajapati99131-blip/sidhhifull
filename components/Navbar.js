@@ -42,6 +42,7 @@ export default function Navbar() {
       items: [
         { href: "/users", label: "All Users", dot: "bg-violet-500" },
         { href: "/policies", label: "Policies", dot: "bg-rose-500" },
+        { href: "/documents/manage", label: "PDF Documents", dot: "bg-rose-500" },
         { href: "/customer", label: "Customer lead ", dot: "bg-sky-500" },
         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
@@ -159,6 +160,7 @@ export default function Navbar() {
                       {[
                         { href: "/customer", label: "Customer lead", dot: "bg-sky-500" },
                         { href: "/policies", label: "Policies", dot: "bg-rose-500" },
+                        { href: "/documents/manage", label: "PDF Documents", dot: "bg-rose-500" },
                         { href: "/followup", label: "Follow-ups", dot: "bg-sky-500" },
                         { href: "/complaints", label: "Complaints", dot: "bg-red-500" },
                         { href: "/allattendance", label: "Attendance", dot: "bg-teal-500" },
